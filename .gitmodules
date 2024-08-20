@@ -1,0 +1,3 @@
+[submodule "logs/gameboy-doctor"]
+	path = logs/gameboy-doctor
+	url = https://github.com/robert/gameboy-doctor.git
