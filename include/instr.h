@@ -2,7 +2,7 @@
 #define INSTR_H_
 
 #include "cpu.h"
-#include "cpu_utils.h"
+#include "mmu.h"
 #include "log.h"
 
 #include <stddef.h>
@@ -49,33 +49,46 @@
 #define LNIBBLE(byte)   (byte & 0x0F)
 
 #define GET_MACRO(_0, _1, NAME, ...) NAME
-#define _INC_CYCLE1(step) (context->m_cycle_counter+=step)
-#define _INC_CYCLE0()     (_INC_CYCLE1(1))
+#define _INC_CYCLE1(step) do { (gb->cpu)->m_cycle_counter+=step; ppu_tick(gb); } while(0)
+#define _INC_CYCLE0()     _INC_CYCLE1(1)
 #define INC_CYCLE(...)    GET_MACRO(_0, ##__VA_ARGS__, _INC_CYCLE1, _INC_CYCLE0)(__VA_ARGS__)
 
+BYTE read_memory(GB_gameboy_t *gb, BYTE addr)                { BYTE res = GB_mem_read(gb, addr); ppu_tick(gb); return res; }
+void write_memory(GB_gameboy_t *gb, BYTE addr, BYTE data)    { GB_mem_write(gb, addr, data); ppu_tick(gb); }
+
+#define READ_MEMORY(addr) read_memory(gb, addr)
+#define WRITE_MEMORY(addr, data) write_memory(gb, addr, data)
+
+#define FETCH_CYCLE() do {                                                                                                          \
+    LOG_CPU_STATE();                                                                                                                \
+    /* TODO: "Interrupts are checked before fetching a new instruction" */                                                          \
+    IR = GB_mem_read(gb, PC); PC++;                                                                                                 \
+    ppu_tick(gb);                                                                                                                   \
+} while(0)
+
 static long REGISTER_OFFSET_TABLE[8] = {
-    offsetof(CPU, bc.b.h),  /* B */
-    offsetof(CPU, bc.b.l),  /* C */
-    offsetof(CPU, de.b.h),  /* D */
-    offsetof(CPU, de.b.l),  /* E */
-    offsetof(CPU, hl.b.h),  /* H */
-    offsetof(CPU, hl.b.l),  /* L */
+    offsetof(GB_cpu_t, bc.b.h),  /* B */
+    offsetof(GB_cpu_t, bc.b.l),  /* C */
+    offsetof(GB_cpu_t, de.b.h),  /* D */
+    offsetof(GB_cpu_t, de.b.l),  /* E */
+    offsetof(GB_cpu_t, hl.b.h),  /* H */
+    offsetof(GB_cpu_t, hl.b.l),  /* L */
     0,                      /* (HL) */
-    offsetof(CPU, af.b.h)   /* A */
+    offsetof(GB_cpu_t, af.b.h)   /* A */
 };
 
 static long REGISTER_PAIR_OFFSET_TABLE[4] = {
-    offsetof(CPU, bc.w),    /* BC */
-    offsetof(CPU, de.w),    /* DE */
-    offsetof(CPU, hl.w),    /* HL */
-    offsetof(CPU, sp.w)     /* SP */
+    offsetof(GB_cpu_t, bc.w),    /* BC */
+    offsetof(GB_cpu_t, de.w),    /* DE */
+    offsetof(GB_cpu_t, hl.w),    /* HL */
+    offsetof(GB_cpu_t, sp.w)     /* SP */
 };
 
 static long REGISTER_PAIR2_OFFSET_TABLE[4] = {
-    offsetof(CPU, bc.w),    /* BC */
-    offsetof(CPU, de.w),    /* DE */
-    offsetof(CPU, hl.w),    /* HL */
-    offsetof(CPU, af.w)     /* AF */
+    offsetof(GB_cpu_t, bc.w),    /* BC */
+    offsetof(GB_cpu_t, de.w),    /* DE */
+    offsetof(GB_cpu_t, hl.w),    /* HL */
+    offsetof(GB_cpu_t, af.w)     /* AF */
 };
 
 /* Select register in opcode byte */
@@ -83,8 +96,8 @@ static long REGISTER_PAIR2_OFFSET_TABLE[4] = {
 /*      ~~~~~ ~~~~~     */
 /*        |     |____ Z */
 /*        |__________ Y */
-#define REGISTER(index)      ( *( (BYTE*)context + REGISTER_OFFSET_TABLE[ index & 7 ] ) ) // Note to self: 0b111 = 7
-#define REGISTER_PAIR(table) ( *(WORD *)(void *)( (char*)context + table[ OP_P ] ) )
+#define REGISTER(index)      ( *( (BYTE*)(gb->cpu) + REGISTER_OFFSET_TABLE[ index & 7 ] ) ) // Note to self: 0b111 = 7
+#define REGISTER_PAIR(table) ( *(WORD *)(void *)( (char*)(gb->cpu) + table[ OP_P ] ) )
 
 #define RY  REGISTER(OP_Y)
 #define RZ  REGISTER(OP_Z)
@@ -135,7 +148,7 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
  * M-Cycles: 2
 */
 #define LD_R_N() do {                       			\
-    Z = READ_MEMORY(PC); PC++;              			\
+    Z = READ_MEMORY(PC++);                  			\
     SET_RY(Z);                              			\
 } while(0)
 
@@ -194,8 +207,8 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
  * M-Cycles: 4
 */
 #define LD_A_DNN() do {                     			\
-    Z = READ_MEMORY(PC); PC++;              			\
-    W = READ_MEMORY(PC); PC++;              			\
+    Z = READ_MEMORY(PC++);                  			\
+    W = READ_MEMORY(PC++);                  			\
     _LD_A_INDIRECT(WZ);                     			\
 } while(0)
 
@@ -206,8 +219,8 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
  * M-Cycles: 4
 */
 #define LD_DNN_A() do {                     			\
-    Z = READ_MEMORY(PC); PC++;              			\
-    W = READ_MEMORY(PC); PC++;              			\
+    Z = READ_MEMORY(PC++);                  			\
+    W = READ_MEMORY(PC++);                  			\
     _LD_INDIRECT_A(WZ);                     			\
 } while(0)
 
@@ -261,7 +274,7 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
  * M-Cycles: 3
 */
 #define LDH_A_DN() do {                     			\
-    Z = READ_MEMORY(PC); PC++;              			\
+    Z = READ_MEMORY(PC++);                  			\
     _LDH_A_INDIRECT(Z);                     			\
 } while(0)
 
@@ -272,7 +285,7 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
  * M-Cycles: 3
 */
 #define LDH_DN_A() do {                     			\
-    Z = READ_MEMORY(PC); PC++;              			\
+    Z = READ_MEMORY(PC++);                  			\
     _LDH_INDIRECT_A(Z);                     			\
 } while(0)
 
@@ -327,8 +340,8 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
  * M-Cycles: 3
 */
 #define LD_RP_NN() do {                     			\
-    Z   = READ_MEMORY(PC); PC++;            			\
-    W   = READ_MEMORY(PC); PC++;            			\
+    Z   = READ_MEMORY(PC++);                			\
+    W   = READ_MEMORY(PC++);                			\
     RP  = WZ;                               			\
 } while(0)
 
@@ -339,8 +352,8 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
  * M-Cycles: 5
 */
 #define LD_DNN_SP() do {                    			\
-    Z   = READ_MEMORY(PC); PC++;            			\
-    W   = READ_MEMORY(PC); PC++;            			\
+    Z   = READ_MEMORY(PC++);                			\
+    W   = READ_MEMORY(PC++);                			\
     WRITE_MEMORY(WZ, SPl); WZ++; /* lsb */  			\
     WRITE_MEMORY(WZ, SPh);       /* msb */  			\
 } while(0)
@@ -375,8 +388,8 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
  * M-Cycles: 3
 */
 #define POP_RP() do {                       			\
-    Z = READ_MEMORY(SP); SP++;  /* M2 */    			\
-    W = READ_MEMORY(SP); SP++;  /* M3 */    			\
+    Z = READ_MEMORY(SP++);      /* M2 */    			\
+    W = READ_MEMORY(SP++);      /* M3 */    			\
     RP2 = WZ;                   /* M4 */    			\
     F &= 0xF0; /* Ensure low nibble is 0 */ 			\
 } while(0)
@@ -388,7 +401,7 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
  * M-Cycles: 3
 */
 #define LD_HL_SP_DISP() do {                			\
-    Z = READ_MEMORY(PC); PC++;              			\
+    Z = READ_MEMORY(PC++);                  			\
     int res = SP + (SIGNED_BYTE)Z;          			\
     HL = res;                               			\
     F = HF_ADD_CHECK(SPl, (SIGNED_BYTE)Z) 		|		\
@@ -568,7 +581,7 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
  * M-Cycles: n+1
 */
 #define ALU_N() do {                        			\
-    Z = READ_MEMORY(PC); PC++;              			\
+    Z = READ_MEMORY(PC++);                  			\
     ALU(Z);                                 			\
 } while(0)
 
@@ -701,7 +714,7 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
  * Even though we tried to simplify the process, WZ should have the same expected result
 */
 #define ADD_SP_DISP() do {                  			\
-    Z = READ_MEMORY(PC); PC++;              			\
+    Z = READ_MEMORY(PC++);                  			\
     int res = SP + (SIGNED_BYTE)Z;          			\
     F = 0                           			|		\
         0                           			|		\
@@ -964,8 +977,8 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
  * M-Cycles: 4
 */
 #define JP_NN() do {                        			\
-    Z   = READ_MEMORY(PC); PC++; /* M2 */   			\
-    W   = READ_MEMORY(PC); PC++; /* M3 */   			\
+    Z   = READ_MEMORY(PC++);     /* M2 */   			\
+    W   = READ_MEMORY(PC++);     /* M3 */   			\
     PC  = WZ;                /* M4 */       			\
     INC_CYCLE();                            			\
 } while(0)
@@ -988,8 +1001,8 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
  *           3 (cc false)
 */
 #define JP_CC_NN() do {                     			\
-    Z = READ_MEMORY(PC); PC++;              			\
-    W = READ_MEMORY(PC); PC++;              			\
+    Z = READ_MEMORY(PC++);                  			\
+    W = READ_MEMORY(PC++);                  			\
     if (CC(OP_Y)) {                         			\
         PC = WZ;                            			\
         INC_CYCLE();                        			\
@@ -1003,7 +1016,7 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
  * M-Cycles: 3
 */
 #define JP_DISP() do {                      			\
-    Z = READ_MEMORY(PC); PC++;              			\
+    Z = READ_MEMORY(PC++);                  			\
     WZ = PC + (SIGNED_BYTE)Z;               			\
     PC = WZ;                                			\
     INC_CYCLE();                            			\
@@ -1017,7 +1030,7 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
  *           2 (cc false)
 */
 #define JP_CC_DISP() do {                   			\
-    Z = READ_MEMORY(PC); PC++;              			\
+    Z = READ_MEMORY(PC++);                  			\
     WZ = PC + (SIGNED_BYTE)Z;               			\
     if (CC(OP_Y-4)) {                       			\
         PC = WZ;                            			\
@@ -1032,8 +1045,8 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
  * M-Cycles: 6
 */
 #define CALL_NN() do {                      			\
-    Z = READ_MEMORY(PC); PC++;              			\
-    W = READ_MEMORY(PC); PC++;              			\
+    Z = READ_MEMORY(PC++);                  			\
+    W = READ_MEMORY(PC++);                  			\
     SP--; WRITE_MEMORY(SP, PCh);            			\
     SP--; WRITE_MEMORY(SP, PCl);            			\
     PC = WZ;                                			\
@@ -1048,8 +1061,8 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
  *           3 (cc false)
 */
 #define CALL_CC_NN() do {                   			\
-    Z = READ_MEMORY(PC); PC++;              			\
-    W = READ_MEMORY(PC); PC++;              			\
+    Z = READ_MEMORY(PC++);                  			\
+    W = READ_MEMORY(PC++);                  			\
     if (CC(OP_Y)) {                         			\
         SP--; WRITE_MEMORY(SP, PCh);        			\
         SP--; WRITE_MEMORY(SP, PCl);        			\
@@ -1065,8 +1078,8 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
  * M-Cycles: 4
 */
 #define RET() do {                          			\
-    Z = READ_MEMORY(SP); SP++;              			\
-    W = READ_MEMORY(SP); SP++;              			\
+    Z = READ_MEMORY(SP++);                  			\
+    W = READ_MEMORY(SP++);                  			\
     PC = WZ;                                			\
     INC_CYCLE();                            			\
 } while(0)
@@ -1103,8 +1116,8 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
  * M-Cycles: 4
 */
 #define RST_N() do {                        			\
-    --SP; WRITE_MEMORY(SP, PCh);            			\
-    --SP; WRITE_MEMORY(SP, PCl);            			\
+    WRITE_MEMORY(--SP, PCh);            			    \
+    WRITE_MEMORY(--SP, PCl);            			    \
     PC = (OP_Y*8) & 0xFFFF;                 			\
     INC_CYCLE();                            			\
 } while(0)
@@ -1138,7 +1151,7 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
 */
 #define DI() do {                           			\
     LOG_CPU_STATE();                        			\
-    IR = READ_MEMORY(PC); PC++;             			\
+    IR = READ_MEMORY(PC++);                 			\
     _IME = 0;                               			\
     goto after_fetch_cycle;                 			\
 } while(0)

@@ -10,7 +10,6 @@ extern "C" {
 
 #include "cputype.h"
 #include "cpudef.h"
-#include "cpu_utils.h"
 #include "log.h"
 #include "load.h"
 
@@ -44,9 +43,7 @@ typedef union
 } CPU_Reg;
 
 typedef struct {
-    // Registers
     CPU_Reg             ir;                        // Instruction register
-    //CPU_Reg             ie;                        // Interrupt enable
 
     CPU_Reg             af;                        // Register AF (Accumulator + Flags)
     CPU_Reg             bc;                        // Register BC (B + C)
@@ -57,12 +54,6 @@ typedef struct {
     CPU_Reg             pc;                        // Program counter
     CPU_Reg             wz;                        // Memory pointer
 
-    BYTE               *memory;
-    BYTE               *rom;
-    size_t              rom_size;
-
-    WORD                m_div;                      // DIV timer
-
     int                 m_IME; // Interrup master enable [write only]
 
     unsigned            m_cycle_counter;
@@ -70,63 +61,10 @@ typedef struct {
 #ifdef ENABLE_GAMEBOY_DOCTOR_SETUP
     CPU_Debug_Info      debug_info;
 #endif
-} CPU;
+} GB_cpu_t;
 
-#define ROM_SIZE            (context->rom_size+0x100)
-#define ORIGINAL_ROM_SIZE   (context->rom_size)
-
-#define _CPU_INIT(context, src_rom_path) do {                                                                                       \
-    IR                          = 0;                                                                                                \
-    AF                          = 0;                                                                                                \
-    BC                          = 0;                                                                                                \
-    DE                          = 0;                                                                                                \
-    HL                          = 0;                                                                                                \
-    SP                          = 0;                                                                                                \
-    PC                          = 0;                                                                                                \
-    WZ                          = 0;                                                                                                \
-    context->m_IME              = 0;                                                                                                \
-    context->m_cycle_counter    = 0;                                                                                                \
-    int rv = loadrom(src_rom_path, &context->rom, &context->rom_size);                                                              \
-    if (rv != context->rom_size) {                                                                                                  \
-        char *errmsg = "FAILED READING PROVIDED ROM";                                                                               \
-        switch(rv) {                                                                                                                \
-            case LOADROM_FAIL_OPEN:     errmsg = "FAILED OPENING ROM";                                                              \
-            case LOADROM_FAIL_ALLOC:    errmsg = "FAILED ALLOCATING ROM MEMORY";                                                    \
-        }                                                                                                                           \
-        fprintf(stderr, "%s: %s\n", errmsg, src_rom_path);                                                                          \
-        exit(EXIT_FAILURE);                                                                                                         \
-    }                                                                                                                               \
-    context->memory             = (BYTE*)(calloc(0xFFFF+1, sizeof(BYTE)));                                                          \
-} while(0)
-
-#ifdef ENABLE_GAMEBOY_DOCTOR_SETUP
-#define CPU_INIT(context, src_rom_path) do {                                                                                                             \
-        _CPU_INIT(context, src_rom_path);                                                                                           \
-        CPU_GAMEBOY_DOCTOR_SETUP(src_rom_path);                                                                                     \
-} while(0)
-#else
-#define CPU_INIT _CPU_INIT
-#endif
-
-#define _CPU_FREE(context) do {                                                                                                     \
-    if (context->memory)    free(context->memory);                                                                                  \
-    if (context->rom)       free(context->rom);                                                                                     \
-} while(0)
-
-#ifdef ENABLE_GAMEBOY_DOCTOR_SETUP
-#define CPU_FREE(context) do {                                                                                                      \
-        _CPU_FREE(context);                                                                                                         \
-        CPU_GAMEBOY_DOCTOR_CLEANUP();                                                                                               \
-} while(0)
-#else
-#define CPU_FREE _CPU_FREE
-#endif
-
-#define FETCH_CYCLE() do {                                                                                                          \
-    LOG_CPU_STATE();                                                                                                                \
-    IR = READ_MEMORY(PC); PC++;                                                                                                     \
-    /* TODO: check interrupts */                                                                                                    \
-} while(0)
+GB_cpu_t* cpu_create();
+void cpu_destroy(GB_cpu_t *cpu);
 
 #ifdef __cplusplus
 }
