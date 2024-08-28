@@ -1,7 +1,6 @@
-#include "cpu.h"
+#include "gb.h"
 #include "instr.h"
 #include "decode.h"
-#include "load.h"
 
 #define DUMMY_UPDATE_TIMER() do {} while(0)
 
@@ -11,15 +10,21 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    CPU         _context;
-    CPU         *context        = &_context;
-    const char  *src_filename   = argv[1];
+    GB_gameboy_t *gb;
+    const char *src_filename   = argv[1];
 
-    // init
-    CPU_INIT(context, src_filename);
+    gb = GB_create(src_filename);    
 
+    if (gb == NULL) {
+        fprintf(stderr, "ERROR\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // tmp init
     int i = 0;
-    while(i++ < 0x900000) {
+    PC = 0x00;  // TMP workaround test ppu
+    GB_mem_write(gb, 0xFF41, ( gb->memory[0xFF41] & 0xFC ) | (2 & 3) ); // TMP workaround to set PPU MODE 2
+    while(i++ < 0x10000) {
         DECODE();
 
         // fetch
@@ -30,7 +35,7 @@ after_fetch_cycle:
         /* TODO: UPDATE_TIMERS(); */
     }
 
-    CPU_FREE(context);
+    GB_destroy(gb);
 
     return 0;
 }
