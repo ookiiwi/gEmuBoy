@@ -1,10 +1,10 @@
 #include "gb.h"
-#include "cpu.h"
 #include "load.h"
 
 GB_gameboy_t* GB_create(const char *src_rom_path) {
     GB_gameboy_t *gb = (GB_gameboy_t*)( malloc( sizeof(GB_gameboy_t) ) );
     gb->cpu     = NULL;
+    gb->ppu     = NULL;
     gb->memory  = NULL;
     gb->rom     = NULL;
 
@@ -13,6 +13,7 @@ GB_gameboy_t* GB_create(const char *src_rom_path) {
     }
 
     gb->cpu     = cpu_create();
+    gb->ppu     = ppu_create();
     gb->memory  = (BYTE*)( calloc( 0xFFFF, sizeof(BYTE) ) );
 
     if (gb->memory == NULL) {
@@ -33,6 +34,8 @@ GB_gameboy_t* GB_create(const char *src_rom_path) {
         return NULL;                                                   
     }
 
+    ppu_load_sample(gb);
+
 #ifdef ENABLE_GAMEBOY_DOCTOR_SETUP
     CPU_GAMEBOY_DOCTOR_SETUP(src_rom_path);
 #endif  
@@ -47,6 +50,7 @@ void GB_destroy(GB_gameboy_t *gb) {
 
     if (gb == NULL) return;
 
+    ppu_destroy(gb->ppu);
     cpu_destroy(gb->cpu);
 
     if (gb->rom)    free(gb->rom);
