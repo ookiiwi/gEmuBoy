@@ -5,7 +5,7 @@
 ### cpu_instrs
 
 - [X] 01-special.gb
-- [ ] 02-interrupts.gb
+- [X] 02-interrupts.gb
 - [X] 03-op sp,hl.gb
 - [X] 04-op r,imm.gb
 - [X] 05-op rp.gb
