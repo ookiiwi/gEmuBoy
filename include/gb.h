@@ -18,5 +18,6 @@ struct GB_gameboy_s {
 
 GB_gameboy_t*   GB_create(const char *src_rom_path);
 void            GB_destroy(GB_gameboy_t *gb);
+void            GB_run(GB_gameboy_t *gb);
 
 #endif
