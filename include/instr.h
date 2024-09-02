@@ -2,8 +2,12 @@
 #define INSTR_H_
 
 #include "cpu.h"
+#include "cpudef.h"
 #include "mmu.h"
 #include "log.h"
+#include "interrupt.h"
+#include "timer.h"
+#include "defs.h"
 
 #include <stddef.h>
 
@@ -27,8 +31,7 @@
 #define HF ((F >> 5) & 1)
 #define CF ((F >> 4) & 1)
 
-
-#define ZF_CHECK(byte)  (((byte & 0xFF) == 0) << 7)
+#define ZF_CHECK(byte)          ( ( ( byte & 0xFF ) == 0 ) << 7 )
 #define HF_ADC_CHECK(a, b, c)   ( ( ( (a & 0xF) + (b & 0xF) + (c & 0xF) ) & 0x10 ) << 1 )          /* Half-carry bit = bit 3   */
 #define HF_SBC_CHECK(a, b, c)   ( ( ( (a & 0xF) - (b & 0xF) - (c & 0xF) ) & 0x10 ) << 1 )          /* Half-carry bit = bit 3   */
 #define HF_ADD_CHECK(a, b)      HF_ADC_CHECK(a, b, 0)
@@ -39,31 +42,25 @@
 #define HF_CHECK16(res, a, b)   ( ( ( ( res ^ a ^ b ) >> 8 ) & 0x10 ) << 1 )
 #define CF_CHECK16(a, b)        ( ( a > 0xFFFF - b ) << 4 )
 
-#define MSB(word)       ( (word >> 8) & 0xFF )
-#define LSB(word)       (word & 0xFF)
+#define MSB(word)               ( ( word >> 8 ) & 0xFF  )
+#define LSB(word)               (   word        & 0xFF  )
 
-#define MSb(byte)       ( ( byte & 0xFF ) >> 7 )
-#define LSb(byte)       ( byte &  1 )
+#define MSb(byte)               ( ( byte & 0xFF ) >> 7  )
+#define LSb(byte)               (   byte &  1           )
 
-#define HNIBBLE(byte)   ((byte >> 4) & 0x0F)
-#define LNIBBLE(byte)   (byte & 0x0F)
+#define HNIBBLE(byte)           ( ( byte >> 4 ) & 0x0F  )
+#define LNIBBLE(byte)           (   byte        & 0x0F  )
 
-#define GET_MACRO(_0, _1, NAME, ...) NAME
-#define _INC_CYCLE1(step) do { (gb->cpu)->m_cycle_counter+=step; ppu_tick(gb); } while(0)
-#define _INC_CYCLE0()     _INC_CYCLE1(1)
-#define INC_CYCLE(...)    GET_MACRO(_0, ##__VA_ARGS__, _INC_CYCLE1, _INC_CYCLE0)(__VA_ARGS__)
-
-BYTE read_memory(GB_gameboy_t *gb, BYTE addr)                { BYTE res = GB_mem_read(gb, addr); ppu_tick(gb); return res; }
-void write_memory(GB_gameboy_t *gb, BYTE addr, BYTE data)    { GB_mem_write(gb, addr, data); ppu_tick(gb); }
+static inline BYTE read_memory(GB_gameboy_t *gb, WORD addr) { 
+    BYTE res = GB_mem_read(gb, addr); 
+    INC_CYCLE();
+    return res; 
+}
 
 #define READ_MEMORY(addr) read_memory(gb, addr)
-#define WRITE_MEMORY(addr, data) write_memory(gb, addr, data)
-
-#define FETCH_CYCLE() do {                                                                                                          \
-    LOG_CPU_STATE();                                                                                                                \
-    /* TODO: "Interrupts are checked before fetching a new instruction" */                                                          \
-    IR = GB_mem_read(gb, PC); PC++;                                                                                                 \
-    ppu_tick(gb);                                                                                                                   \
+#define WRITE_MEMORY(addr, data) do {               \
+    GB_mem_write(gb, addr, data);                   \
+    INC_CYCLE();                                    \
 } while(0)
 
 static long REGISTER_OFFSET_TABLE[8] = {
@@ -73,7 +70,7 @@ static long REGISTER_OFFSET_TABLE[8] = {
     offsetof(GB_cpu_t, de.b.l),  /* E */
     offsetof(GB_cpu_t, hl.b.h),  /* H */
     offsetof(GB_cpu_t, hl.b.l),  /* L */
-    0,                      /* (HL) */
+    0,                          /* (HL) */
     offsetof(GB_cpu_t, af.b.h)   /* A */
 };
 
@@ -977,9 +974,9 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
  * M-Cycles: 4
 */
 #define JP_NN() do {                        			\
-    Z   = READ_MEMORY(PC++);     /* M2 */   			\
-    W   = READ_MEMORY(PC++);     /* M3 */   			\
-    PC  = WZ;                /* M4 */       			\
+    Z   = READ_MEMORY(PC++);        /* M2 */   			\
+    W   = READ_MEMORY(PC++);        /* M3 */   			\
+    PC  = WZ;                       /* M4 */       	    \
     INC_CYCLE();                            			\
 } while(0)
 
@@ -1131,6 +1128,7 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
  * M-Cycles: 1
 */
 #define HALT() do {                         			\
+    gb->cpu->m_is_halted = 1;                           \
 } while(0)
 
 /**
@@ -1150,10 +1148,7 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
  * M-Cycles: 1
 */
 #define DI() do {                           			\
-    LOG_CPU_STATE();                        			\
-    IR = READ_MEMORY(PC++);                 			\
     _IME = 0;                               			\
-    goto after_fetch_cycle;                 			\
 } while(0)
 
 /**
@@ -1163,9 +1158,7 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
  * M-Cycles: 1
 */
 #define EI() do {                           			\
-    FETCH_CYCLE();                          			\
-    _IME = 1;                               			\
-    goto after_fetch_cycle;                 			\
+    gb->cpu->m_ei_delay = 2;                            \
 } while(0)
 
 #endif
