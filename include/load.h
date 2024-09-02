@@ -3,7 +3,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include "cpudef.h"
 #include "cputype.h"
 
 #define LOADROM_FAIL_OPEN   (-1)
