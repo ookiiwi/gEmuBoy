@@ -9,9 +9,9 @@ extern "C" {
 #include <stdlib.h>
 
 #include "cputype.h"
-#include "cpudef.h"
 #include "log.h"
 #include "load.h"
+#include "timer.h"
 
 // How to dump: `hexdump -e '16/1 "0x%02x, " "\n"' dmg_boot.bin`
 static const BYTE BOOTROM[] = {
@@ -43,7 +43,8 @@ typedef union
 } CPU_Reg;
 
 typedef struct {
-    CPU_Reg             ir;                        // Instruction register
+    WORD                ir;                        // Instruction register
+    WORD                prev_ir;
 
     CPU_Reg             af;                        // Register AF (Accumulator + Flags)
     CPU_Reg             bc;                        // Register BC (B + C)
@@ -55,8 +56,13 @@ typedef struct {
     CPU_Reg             wz;                        // Memory pointer
 
     int                 m_IME; // Interrup master enable [write only]
+    int                 m_ei_delay;
 
+    int                 m_is_halted;
+    int                 m_halt_bug;
+    int                 m_is_stopped;
     unsigned            m_cycle_counter;
+    GB_timer_t         *m_timer;
 
 #ifdef ENABLE_GAMEBOY_DOCTOR_SETUP
     CPU_Debug_Info      debug_info;

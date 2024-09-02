@@ -16,7 +16,8 @@
 #define W       (gb->cpu->wz.b.h)
 #define Z       (gb->cpu->wz.b.l)
 
-#define IR      (gb->cpu->ir.w)
+#define PREV_IR (gb->cpu->prev_ir)
+#define IR      (gb->cpu->ir)
 #define AF      (gb->cpu->af.w)
 #define BC      (gb->cpu->bc.w)
 #define DE      (gb->cpu->de.w)
