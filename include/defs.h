@@ -5,7 +5,7 @@ typedef struct GB_gameboy_s GB_gameboy_t;
 
 #define GET_MACRO(_0, _1, NAME, ...) NAME
 #define _INC_CYCLE0() do {                                              \
-    (gb->cpu)->m_cycle_counter++;                                       \
+    (gb->cpu)->m_cycle_counter+=4;                                      \
     ppu_tick(gb);                                                       \
     GB_update_timer(gb);                                                \
 } while(0)
@@ -16,7 +16,8 @@ typedef struct GB_gameboy_s GB_gameboy_t;
     LOG_CPU_STATE();                                                                                                                \
     GB_handle_interrupt(gb);                                                                                                        \
     PREV_IR = IR;                                                                                                                   \
-    IR = READ_MEMORY(PC); PC++;                                                                                                     \
+    INC_CYCLE();                                                                                                                    \
+    IR = GB_mem_read(gb, PC++);                                                                                                     \
     if (gb->cpu->m_halt_bug) {  /* Either adjust RST's pushed address or else read byte twice */                                    \
         PC--;                                                                                                                       \
         gb->cpu->m_halt_bug = 0;                                                                                                    \
