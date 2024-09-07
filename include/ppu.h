@@ -2,13 +2,7 @@
 #define GRAPHIC_H_
 
 #include "defs.h"
-#include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
-
-/**
- *  One pixel of this FIFO is represented by a color ID and a color palette ID 
- */
+#include "lcd.h"
 
 typedef struct OAMBuffer OAMBuffer;
 typedef struct PixelFetcher PixelFetcher;
@@ -19,6 +13,9 @@ typedef struct {
     int             lx;                         /* Current scanline X coordinate */
     int             pending_cycles;
     int             scanline_dot_counter;
+    int             m_ppu_mode_switched;
+
+    GB_LCD_t        *lcd;
 } GB_ppu_t;
 
 GB_ppu_t* ppu_create();

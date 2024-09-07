@@ -2,9 +2,12 @@
 #include "mmu.h"
 #include "cpudef.h"
 #include "gb.h"
+#include "interrupt.h"
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
+#include <string.h>
 
 /* LCD Control Register */
 #define LCDC                        ( GB_mem_read(gb, 0xFF40) )
@@ -28,8 +31,8 @@
 #define LYC_LY                      ( (STAT >> 2) & 1 )     /* READ ONLY */
 #define PPU_MODE                    ( STAT & 3 )            /* READ ONLY */
 
-#define PPU_MODE_VBLANK     (0)
-#define PPU_MODE_HBLANK     (1)
+#define PPU_MODE_HBLANK     (0)
+#define PPU_MODE_VBLANK     (1)
 #define PPU_MODE_OAMSEARCH  (2)
 #define PPU_MODE_DRAW       (3)
 
@@ -48,8 +51,13 @@
 
 #define SET_REGISTER_BIT(addr, value, pos, bit)     ( GB_mem_write(gb, addr, ( ( value & ( ~(1 << pos) ) ) ) | (1 << pos) ) )
 #define SET_LCDC(pos, bit)                          ( SET_REGISTER_BIT(0xFF40, LCDC, pos, bit) )
-#define SET_STAT(pos, bit)                          ( SET_REGISTER_BIT(0xFF41, LCDC, pos, bit) )
-#define SET_PPU_MODE(mode)                          ( GB_mem_write(gb, 0xFF41, ( STAT & 0xFC ) | (mode & 3) ) )
+#define SET_STAT(pos, bit)                          ( SET_REGISTER_BIT(0xFF41, STAT, pos, bit) )
+#define SET_PPU_MODE(mode) do {                                 \
+    GB_mem_write(gb, 0xFF41, ( STAT & 0xFC ) | (mode & 3) );    \
+    gb->ppu->m_ppu_mode_switched = 1;                           \
+} while(0)
+
+#define PPU_MODE_SWITCHED                           ( gb->ppu->m_ppu_mode_switched + ( gb->ppu->m_ppu_mode_switched = 0) )
 
 #define LX                                          ( gb->ppu->lx                       )
 #define PENDING_CYCLES                              ( gb->ppu->pending_cycles           )
@@ -75,6 +83,8 @@
 #define PPU_DOTS_PER_SCANLINE   (456)
 #define MAX_LY                  (153)
 #define VBLANK_LY_START         (143)
+
+#define NB_RENDERED_PIXELS      ( LX - (SCX % 8) )
 
 typedef struct PixelFIFO_Cell PixelFIFO_Cell;
 
@@ -216,9 +226,11 @@ GB_ppu_t* ppu_create() {
 
     ppu->oam_buffer                 = oambuffer_create();
     ppu->pixel_fetcher              = pixelfetcher_create();
+    ppu->lcd                        = GB_lcd_create();
     ppu->lx                         = 0;
     ppu->pending_cycles             = 0;
     ppu->scanline_dot_counter       = 0;
+    ppu->m_ppu_mode_switched        = 1;
 
     return ppu;
 }
@@ -228,6 +240,7 @@ void ppu_destroy(GB_ppu_t *ppu) {
 
     oambuffer_destroy(ppu->oam_buffer);
     pixelfetcher_destroy(ppu->pixel_fetcher);
+    GB_lcd_destroy(ppu->lcd);
     free(ppu);
 }
 
@@ -236,27 +249,36 @@ void pixelfetcher_get_tile_id(GB_gameboy_t *gb) {
     unsigned x, y;
     unsigned offset;
 
-    tilemap = 0x9800;
+    if (!LCDC_BG_EN) {
+        return;
+    }
+
+    tilemap = LCDC_BG_MAP ? 0x9C00 : 0x9800;
     x       = ( (SCX / 8) + PIXEL_FETCHER->x ) & 0x1F;
     y       = ( LY + SCY ) & 0xFF; 
-    offset  = ( x + ( 4 * y ) ) & 0x3FF;                // Note: 4 * y is the simplified form of 32 * ( y / 8 )
+    offset  = ( x + 32 * ( y / 8 ) );
 
     PIXEL_FETCHER->tile_id = GB_mem_read(gb, tilemap+offset);
-    PIXEL_FETCHER->x = x + 1;
+    PIXEL_FETCHER->x++;
     PIXEL_FETCHER->y = y;
 }
 
 BYTE pixelfetcher_get_tile_data(GB_gameboy_t *gb, int high) {
     int addr = 0x8000;
     int offset = PIXEL_FETCHER->tile_id;
+
+    if (!LCDC_BG_EN) {
+        return 0x00;
+    }
+
     high = high ? 1 : 0;
 
-    if ( LCDC_TILE_SEL ) {
+    if ( !LCDC_TILE_SEL ) {
         addr = 0x9000;
         offset = (SIGNED_BYTE)offset;
     }
 
-    return GB_mem_read(gb, addr+offset+high+2 * ((LY + SCY) % 8));
+    return GB_mem_read(gb, addr + offset*16 + high + 2 * ( ( LY + SCY ) % 8 ) );
 }
 
 void pixelfetcher_push(GB_gameboy_t *gb) {
@@ -304,62 +326,113 @@ void ppu_render(GB_gameboy_t *gb) {
     pixelfifo_pop(PIXEL_FETCHER->bg_fifo, &color_id, &palette_id, &bg_priority);
     /* TODO: sprite pop */
 
-    if ( LX++ >= (SCX % 8) ) {
-        const char *pixel = colors[color_id];
-        printf("%s", pixel);
+    if ( LX >= (SCX % 8) ) {
+        GB_lcd_set_pixel(gb->ppu->lcd, NB_RENDERED_PIXELS, LY, color_id);
     }
 
-    if (LX >= 160 + (SCX % 8)) {
-        LX = 0;
+    LX++;
+    SCANLINE_DOT_COUNTER++;
+}
+
+// Aimed to be called right before exiting mode callback
+#define CHECK_SCANLINE_ENDED(if_ended_statement) do {           \
+    if (SCANLINE_DOT_COUNTER >= PPU_DOTS_PER_SCANLINE) {        \
+        LX = 0;                                                 \
+        LY++;                                                   \
+        SCANLINE_DOT_COUNTER = 0;                               \
+        if_ended_statement;                                     \
+    }                                                           \
+} while(0)
+
+void ppu_oamsearch(GB_gameboy_t *gb) {
+    if ( PPU_MODE_SWITCHED ) {
+        SET_STAT(2, LY == LYC);
+        if (LY == LYC && LYC_INT) {
+            REQUEST_INTERRUPT(IF_LCD);
+        }
+
+        if ( MODE2_INT ) REQUEST_INTERRUPT(IF_LCD);
+    }
+
+    // SOME CODE ... 
+
+    if (++SCANLINE_DOT_COUNTER >= 80) {
+        SET_PPU_MODE(PPU_MODE_DRAW);
+    }
+}
+
+void ppu_draw(GB_gameboy_t *gb) {
+    pixel_fetch(gb);
+    ppu_render(gb);
+
+    // Finish drawing if 160 have been drawn or 289 dots consumed
+    if ( NB_RENDERED_PIXELS >= 160 || SCANLINE_DOT_COUNTER >= 289 ) {
         PIXEL_FETCHER_RESET();
         SET_PPU_MODE(PPU_MODE_HBLANK);
     }
 }
 
-void ppu_vblank(GB_gameboy_t *gb) {
-    if (LY >= MAX_LY) {
-        SET_PPU_MODE(PPU_MODE_OAMSEARCH);
-        LY = 0;
-        LX = 0;
-    } else if (SCANLINE_DOT_COUNTER >= PPU_DOTS_PER_SCANLINE) {
-        LX = 0;
+void ppu_hblank(GB_gameboy_t *gb) {
+    if ( PPU_MODE_SWITCHED ) {
+        if (MODE0_INT) REQUEST_INTERRUPT(IF_LCD);
+    }
+
+    if ( ++SCANLINE_DOT_COUNTER >= PPU_DOTS_PER_SCANLINE ) {
+        int mode = LY >= VBLANK_LY_START ? PPU_MODE_VBLANK : PPU_MODE_OAMSEARCH;
+
         SCANLINE_DOT_COUNTER = 0;
+        LX = 0;
         LY++;
-        SET_STAT(2, LY == LYC);
+
+        SET_PPU_MODE(mode);
     }
 }
 
-void ppu_hblank(GB_gameboy_t *gb) {
+void ppu_vblank(GB_gameboy_t *gb) {
 
-    printf(" ------- HBLANK -------");
+    // VBLANK start
+    if ( PPU_MODE_SWITCHED ) {
+        REQUEST_INTERRUPT(IF_VBLANK);
 
-    if (SCANLINE_DOT_COUNTER >= PPU_DOTS_PER_SCANLINE) {
-        SCANLINE_DOT_COUNTER=0;
-        SET_PPU_MODE(LY >= VBLANK_LY_START ? PPU_MODE_VBLANK : PPU_MODE_OAMSEARCH);
-        printf("\n");
+        if (MODE1_INT) {
+            REQUEST_INTERRUPT(IF_LCD);
+        }
 
-        LY++;
+        GB_lcd_clear(gb->ppu->lcd);
+        GB_lcd_render(gb->ppu->lcd);
     }
+
+    if ( !SCANLINE_DOT_COUNTER ) {
+        SET_STAT(2, LY == LYC);
+        if (LY == LYC && LYC_INT) {
+            REQUEST_INTERRUPT(IF_LCD);
+        }
+    }
+
+    CHECK_SCANLINE_ENDED();
+
+    if (LY > MAX_LY) {
+        LX = 0;
+        LY = 0;
+        SCANLINE_DOT_COUNTER = 0;
+        SET_PPU_MODE(PPU_MODE_OAMSEARCH);
+    }
+
+    SCANLINE_DOT_COUNTER++;
 }
 
 void ppu_tick(GB_gameboy_t *gb) {
-    SCANLINE_DOT_COUNTER+=4;
-    PENDING_CYCLES+=4;
+    if (gb == NULL || gb->ppu == NULL) return;
 
-    switch (PPU_MODE) {
-        case 0: ppu_vblank(gb); break;  // 456 * 10 = 4560 dots
-        case 1: ppu_hblank(gb); break;  // 87-204 dots
-        case 2:                         // 80 dots
-            if (SCANLINE_DOT_COUNTER >= 80) {
-                SET_PPU_MODE(PPU_MODE_DRAW);
-            }
-            break;
-        case 3: 
-            pixel_fetch(gb);
-            ppu_render(gb);
-            break;
+    for ( int i = 0; i < 4; i++) {
+        PENDING_CYCLES++;
+        switch (PPU_MODE) {
+            case PPU_MODE_HBLANK:       ppu_hblank(gb);     break;  // 87-204 dots
+            case PPU_MODE_VBLANK:       ppu_vblank(gb);     break;  // 456 * 10 = 4560 dots
+            case PPU_MODE_OAMSEARCH:    ppu_oamsearch(gb);  break;  // 80 dots
+            case PPU_MODE_DRAW:         ppu_draw(gb);       break;  // 172-289 dots
+        }
     }
-
 }
 
 void ppu_load_sample(GB_gameboy_t *gb) {
@@ -374,6 +447,8 @@ void ppu_load_sample(GB_gameboy_t *gb) {
         0x7E, 0xFF 
     };
     BYTE tilemap[1023] = { 0 };
+
+    GB_mem_write(gb, 0xFF40, LCDC | 0x10);
 
     memcpy((void*)(&gb->memory[0x8000]), (void*)tiledata,  16 * sizeof(BYTE));
     memcpy((void*)(&gb->memory[0x9800]), (void*)tilemap, 1023 * sizeof(BYTE));
