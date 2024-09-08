@@ -43,6 +43,7 @@
 /* Window Coordinates */
 #define WY                          ( GB_mem_read(gb, 0xFF4A) )
 #define WX                          ( GB_mem_read(gb, 0xFF4B) )
+#define SHOW_WIN                    ( LCDC_BG_EN && LCDC_WIN_EN && (WX - 7) <= LX && WY <= LY )
 
 /* LCD Monochrome Palettes */
 #define BGP                         ( GB_mem_read(gb, 0xFF47) )
@@ -116,6 +117,9 @@ struct PixelFetcher {
     BYTE            tile_data_low;
     PixelFIFO      *bg_fifo;
     PixelFIFO      *obj_fifo;
+
+    int             draw_window;
+    int             window_line_counter;
 };
 
 PixelFIFO* pixelfifo_create() {
@@ -147,12 +151,15 @@ void pixelfifo_push(PixelFIFO *fifo, BYTE color_id, BYTE palette_id, BYTE bg_pri
 
 /// Merge [high] and [low] to form a row of 8 pixels and push them into the fifo
 void pixelfifo_push_row(PixelFIFO *fifo, BYTE high, BYTE low) {
+    //printf("MIX AND PUSH %02X AND %02X\n", high, low);
     for ( int i = 0; i < 8; i++) {
         int data = ( ( high & 0x80 ) >> 6 ) | ( ( low & 0x80 ) >> 7 );
+        //printf("%d ", data);
         pixelfifo_push( fifo, data, 0, 0 );
         high <<= 1;
         low  <<= 1;
     }
+    //putchar('\n');
 }
 
 int pixelfifo_pop(PixelFIFO *fifo, BYTE *color_id, BYTE *palette_id, BYTE *bg_priority) {
@@ -209,6 +216,8 @@ PixelFetcher* pixelfetcher_create() {
     fetcher->y                      = 0;
     fetcher->bg_fifo                = pixelfifo_create();
     fetcher->obj_fifo               = pixelfifo_create();
+    fetcher->draw_window            = 0;
+    fetcher->window_line_counter    = -1;
 
     return fetcher;
 }
@@ -253,9 +262,16 @@ void pixelfetcher_get_tile_id(GB_gameboy_t *gb) {
         return;
     }
 
-    tilemap = LCDC_BG_MAP ? 0x9C00 : 0x9800;
-    x       = ( (SCX / 8) + PIXEL_FETCHER->x ) & 0x1F;
-    y       = ( LY + SCY ) & 0xFF; 
+    if (SHOW_WIN) {
+        tilemap =  LCDC_WIN_MAP ? 0x9C00 : 0x9800;
+        x       = ( PIXEL_FETCHER->x ) & 0x1F;
+        y       = ( PIXEL_FETCHER->window_line_counter );
+    } else {
+        tilemap = LCDC_BG_MAP ? 0x9C00 : 0x9800;
+        x       = ( ( SCX / 8 ) + PIXEL_FETCHER->x ) & 0x1F;
+        y       = ( LY + SCY ) & 0xFF; 
+    }
+
     offset  = ( x + 32 * ( y / 8 ) );
 
     PIXEL_FETCHER->tile_id = GB_mem_read(gb, tilemap+offset);
@@ -265,7 +281,8 @@ void pixelfetcher_get_tile_id(GB_gameboy_t *gb) {
 
 BYTE pixelfetcher_get_tile_data(GB_gameboy_t *gb, int high) {
     int addr = 0x8000;
-    int offset = PIXEL_FETCHER->tile_id;
+    int tile_id = PIXEL_FETCHER->tile_id;
+    int offset  = SHOW_WIN ? PIXEL_FETCHER->window_line_counter : LY + SCY;
 
     if (!LCDC_BG_EN) {
         return 0x00;
@@ -275,10 +292,10 @@ BYTE pixelfetcher_get_tile_data(GB_gameboy_t *gb, int high) {
 
     if ( !LCDC_TILE_SEL ) {
         addr = 0x9000;
-        offset = (SIGNED_BYTE)offset;
+        tile_id = (SIGNED_BYTE)tile_id;
     }
 
-    return GB_mem_read(gb, addr + offset*16 + high + 2 * ( ( LY + SCY ) % 8 ) );
+    return GB_mem_read(gb, addr + tile_id*16 + high + 2 * (offset%8) );
 }
 
 void pixelfetcher_push(GB_gameboy_t *gb) {
@@ -290,16 +307,19 @@ void pixelfetcher_push(GB_gameboy_t *gb) {
     }
 }
 
-#define PIXEL_FETCHER_RESET() do {              \
-    pixelfifo_clear(PIXEL_FETCHER->bg_fifo);    \
-    PIXEL_FETCHER->x = 0;                       \
-    PIXEL_FETCHER->status = 0;                  \
+#define PIXEL_FETCHER_RESET() do {                                  \
+    pixelfifo_clear(PIXEL_FETCHER->bg_fifo);                        \
+    PIXEL_FETCHER->x                        = 0;                    \
+    PIXEL_FETCHER->y                        = 0;                    \
+    PIXEL_FETCHER->status                   = 0;                    \
 } while(0)
 
 void pixel_fetch(GB_gameboy_t *gb) {
     // Advance one step every 2-dot
-    if (PENDING_CYCLES < 2) return;
-    PENDING_CYCLES -= 2;
+    if (PIXEL_FETCHER->status < 3) {
+        if (PENDING_CYCLES < 2) return;
+        PENDING_CYCLES -= 2;
+    }
 
     switch (PIXEL_FETCHER->status++) {
         case FETCHER_GET_TILE_ID: 
@@ -332,6 +352,11 @@ void ppu_render(GB_gameboy_t *gb) {
 
     LX++;
     SCANLINE_DOT_COUNTER++;
+
+    if (!PIXEL_FETCHER->draw_window && SHOW_WIN) {
+        PIXEL_FETCHER_RESET();
+        PIXEL_FETCHER->draw_window = 1;
+    } 
 }
 
 // Aimed to be called right before exiting mode callback
@@ -358,6 +383,10 @@ void ppu_oamsearch(GB_gameboy_t *gb) {
 
     if (++SCANLINE_DOT_COUNTER >= 80) {
         SET_PPU_MODE(PPU_MODE_DRAW);
+
+        if (WY <= LY && WX-7 <= 160) {
+            PIXEL_FETCHER->window_line_counter++;
+        }
     }
 }
 
@@ -375,6 +404,7 @@ void ppu_draw(GB_gameboy_t *gb) {
 void ppu_hblank(GB_gameboy_t *gb) {
     if ( PPU_MODE_SWITCHED ) {
         if (MODE0_INT) REQUEST_INTERRUPT(IF_LCD);
+        PIXEL_FETCHER->draw_window = 0;
     }
 
     if ( ++SCANLINE_DOT_COUNTER >= PPU_DOTS_PER_SCANLINE ) {
@@ -400,6 +430,8 @@ void ppu_vblank(GB_gameboy_t *gb) {
 
         GB_lcd_clear(gb->ppu->lcd);
         GB_lcd_render(gb->ppu->lcd);
+
+        PIXEL_FETCHER->window_line_counter = -1;
     }
 
     if ( !SCANLINE_DOT_COUNTER ) {
