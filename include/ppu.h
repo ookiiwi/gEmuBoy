@@ -9,7 +9,9 @@ typedef struct PixelFetcher PixelFetcher;
 
 typedef struct {
     OAMBuffer       *oam_buffer;
-    PixelFetcher    *pixel_fetcher;
+    PixelFetcher    *bg_fetcher;
+    PixelFetcher    *obj_fetcher;
+    int             fetch_obj;
     int             lx;                         /* Current scanline X coordinate */
     int             pending_cycles;
     int             scanline_dot_counter;

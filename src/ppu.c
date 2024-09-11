@@ -64,13 +64,10 @@
 #define PENDING_CYCLES                              ( gb->ppu->pending_cycles           )
 #define SCANLINE_DOT_COUNTER                        ( gb->ppu->scanline_dot_counter     )
 
-#define OAMBUFFER                                   ( gb->ppu->oam_buffer->buffer       )
-#define OAMBUFFER_SIZE                              ( gb->ppu->oam_buffer->buf_size     )
-#define OAMSEARCH_CUR_ADDR                          ( gb->ppu->oam_buffer->cur_oam_addr )
+#define OAMBUFFER                                   ( gb->ppu->oam_buffer               )
 
-#define PIXEL_FETCHER                               ( gb->ppu->pixel_fetcher            )
-#define BG_FIFO                                     ( PIXEL_FETCHER->bg_fifo            )
-#define OBJ_FIFO                                    ( PIXEL_FETCHER->obj_fifo           )
+#define BG_FETCHER                                  ( gb->ppu->bg_fetcher               )
+#define OBJ_FETCHER                                 ( gb->ppu->obj_fetcher              )
 
 #define FETCHER_GET_TILE_ID     (0)
 #define FETCHER_GET_DATA_LOW    (1)
@@ -87,18 +84,23 @@
 
 #define NB_RENDERED_PIXELS      ( LX - (SCX % 8) )
 
+// Default values
+#define WINDOW_LINE_COUNTER_DEFAULT     (-1)
+#define SPRITE_TALL_LY_START_DEFAULT    (-1)
+#define OAM_START_ADDR                  (0xFE00)
+#define PPU_MODE_SWITCHED_DEFAULT       (1)
+
 typedef struct PixelFIFO_Cell PixelFIFO_Cell;
 
 struct PixelFIFO_Cell {
     BYTE color_id;
     BYTE palette_id;
     BYTE bg_priority;
-    PixelFIFO_Cell *next;
 };
 
 typedef struct {
-    PixelFIFO_Cell *first;
-    PixelFIFO_Cell *last;
+    PixelFIFO_Cell  buffer[16];
+    int start;
     int size;
 } PixelFIFO;
 
@@ -115,66 +117,83 @@ struct PixelFetcher {
     BYTE            tile_id;
     BYTE            tile_data_high;
     BYTE            tile_data_low;
-    PixelFIFO      *bg_fifo;
-    PixelFIFO      *obj_fifo;
+    PixelFIFO      *fifo;
 
     int             draw_window;
     int             window_line_counter;
+
+    int             sprite_addr;
+    int             sprite_tall_ly_start;
+    int             last_sprite_x_end;
 };
 
 PixelFIFO* pixelfifo_create() {
     PixelFIFO *fifo = (PixelFIFO*)( malloc( sizeof(PixelFIFO) ) );
-    fifo->first  = NULL;
-    fifo->last   = NULL;
+    fifo->start = 0;
+    fifo->size  = 0;
 
     return fifo;
 }
 
-void pixelfifo_push(PixelFIFO *fifo, BYTE color_id, BYTE palette_id, BYTE bg_priority) {
-    PixelFIFO_Cell *cell    = (PixelFIFO_Cell*)(malloc(sizeof(PixelFIFO_Cell)));
-    cell->color_id          = color_id;
-    cell->palette_id        = palette_id;
-    cell->bg_priority       = bg_priority;
+void pixelfifo_push(PixelFIFO *fifo, BYTE color_id, BYTE palette_id, BYTE bg_priority) { 
+    if ( fifo->size >= 16 ) return;
 
-    if (fifo->first != NULL) {
-        fifo->last->next = cell;
-        fifo->last = cell;
-    } else {
-        fifo->first = cell;
-        fifo->first->next = cell;
-        fifo->last = cell;
-    }
+    PixelFIFO_Cell cell;
+    cell.color_id          = color_id;
+    cell.palette_id        = palette_id;
+    cell.bg_priority       = bg_priority;
 
-    fifo->last = cell;
+    fifo->buffer[ ( fifo->start + fifo->size ) % 16 ] = cell;
     fifo->size++;
 }
 
-/// Merge [high] and [low] to form a row of 8 pixels and push them into the fifo
-void pixelfifo_push_row(PixelFIFO *fifo, BYTE high, BYTE low) {
-    //printf("MIX AND PUSH %02X AND %02X\n", high, low);
-    for ( int i = 0; i < 8; i++) {
-        int data = ( ( high & 0x80 ) >> 6 ) | ( ( low & 0x80 ) >> 7 );
-        //printf("%d ", data);
-        pixelfifo_push( fifo, data, 0, 0 );
-        high <<= 1;
-        low  <<= 1;
+void pixelfifo_overlap(PixelFIFO *fifo, BYTE color_id, BYTE palette_id, BYTE bg_priority, unsigned offset) {
+    if ( fifo->size >= 16 || offset >= fifo->size ) return;
+
+    PixelFIFO_Cell cell;
+    cell.color_id          = color_id;
+    cell.palette_id        = palette_id;
+    cell.bg_priority       = bg_priority;
+
+    int index = ( fifo->start + fifo->size - offset ) % 16;
+
+    // Replace current cell if transparent
+    if (fifo->buffer[index].color_id == 0) {
+        fifo->buffer[index] = cell;
     }
-    //putchar('\n');
+}
+
+/// Merge [high] and [low] to form a row of 8 pixels and push them into the fifo
+void pixelfifo_push_row(PixelFIFO *fifo, BYTE high, BYTE low, BYTE palette_id, BYTE bg_priority, int flip_x, unsigned overlap_offset) {
+    for ( int i = 0; i < 8; i++) {
+        int data;
+        
+        if (flip_x) {
+            data = ( ( high & 1 ) << 1 ) | ( ( low & 1 ) );
+            high >>= 1;
+            low  >>= 1;
+        } else {
+            data = ( ( high & 0x80 ) >> 6 ) | ( ( low & 0x80 ) >> 7 );
+            high <<= 1;
+            low  <<= 1;
+        }
+
+        if (overlap_offset) {  
+            pixelfifo_overlap( fifo, data, palette_id, bg_priority, overlap_offset-- );
+        } else {
+            pixelfifo_push( fifo, data, palette_id, bg_priority );
+        }
+    }
 }
 
 int pixelfifo_pop(PixelFIFO *fifo, BYTE *color_id, BYTE *palette_id, BYTE *bg_priority) {
-    if (fifo->first == NULL) return -1;
+    if (!fifo->size) return -1;
 
-    PixelFIFO_Cell *tmp = fifo->first->next;
-
-    if (tmp) {
-        if (color_id)       *color_id       = fifo->first->color_id;
-        if (palette_id)     *palette_id     = fifo->first->palette_id;
-        if (bg_priority)    *bg_priority    = fifo->first->bg_priority;
-    }
-
-    free(fifo->first);
-    fifo->first = tmp;
+    if (color_id)       *color_id       = fifo->buffer[fifo->start].color_id;
+    if (palette_id)     *palette_id     = fifo->buffer[fifo->start].palette_id;
+    if (bg_priority)    *bg_priority    = fifo->buffer[fifo->start].bg_priority;
+     
+    fifo->start = ( fifo->start + 1 ) % 16;
     fifo->size--;
 
     return 0;
@@ -182,10 +201,9 @@ int pixelfifo_pop(PixelFIFO *fifo, BYTE *color_id, BYTE *palette_id, BYTE *bg_pr
 
 void pixelfifo_clear(PixelFIFO *fifo) {
     if (fifo == NULL) return;
-    
-    while (fifo->first != NULL) {
-        pixelfifo_pop(fifo, NULL, NULL, NULL);
-    }
+
+    fifo->start = 0;
+    fifo->size = 0;
 }
 
 void pixelfifo_destroy(PixelFIFO *fifo) {
@@ -200,7 +218,7 @@ static inline int pixelfifo_empty(PixelFIFO *fifo) { return fifo->size <= 8; }
 OAMBuffer* oambuffer_create() {
     OAMBuffer *buffer               = (OAMBuffer*)( malloc( sizeof(OAMBuffer) ) );
     buffer->buf_size                = 0;
-    buffer->cur_oam_addr            = 0xFE00;
+    buffer->cur_oam_addr            = OAM_START_ADDR;
 
     return buffer;
 }
@@ -209,15 +227,23 @@ void oambuffer_destroy(OAMBuffer *buffer) {
     if (buffer) free(buffer);
 }
 
+#define OAMBUFFER_CLEAR() do {                                  \
+    memset((void*)OAMBUFFER->buffer, 0, 10);                    \
+    OAMBUFFER->cur_oam_addr = OAM_START_ADDR;                   \
+    OAMBUFFER->buf_size = 0;                                    \
+} while(0)
+
 PixelFetcher* pixelfetcher_create() {
     PixelFetcher *fetcher           = (PixelFetcher*)( malloc( sizeof(PixelFetcher) ) );
     fetcher->status                 = 0;
     fetcher->x                      = 0;
     fetcher->y                      = 0;
-    fetcher->bg_fifo                = pixelfifo_create();
-    fetcher->obj_fifo               = pixelfifo_create();
+    fetcher->fifo                   = pixelfifo_create();
     fetcher->draw_window            = 0;
-    fetcher->window_line_counter    = -1;
+    fetcher->window_line_counter    = WINDOW_LINE_COUNTER_DEFAULT;
+    fetcher->sprite_addr            = 0;
+    fetcher->last_sprite_x_end      = 0;
+    fetcher->sprite_tall_ly_start   = SPRITE_TALL_LY_START_DEFAULT;
 
     return fetcher;
 }
@@ -225,8 +251,7 @@ PixelFetcher* pixelfetcher_create() {
 void pixelfetcher_destroy(PixelFetcher *fetcher) {
     if (fetcher == NULL) return;
 
-    pixelfifo_destroy(fetcher->bg_fifo); 
-    pixelfifo_destroy(fetcher->obj_fifo); 
+    pixelfifo_destroy(fetcher->fifo); 
     free(fetcher);
 }
 
@@ -234,12 +259,13 @@ GB_ppu_t* ppu_create() {
     GB_ppu_t *ppu                   = (GB_ppu_t*)( malloc( sizeof(GB_ppu_t) ) );
 
     ppu->oam_buffer                 = oambuffer_create();
-    ppu->pixel_fetcher              = pixelfetcher_create();
+    ppu->bg_fetcher                 = pixelfetcher_create();
+    ppu->obj_fetcher                = pixelfetcher_create();
     ppu->lcd                        = GB_lcd_create();
     ppu->lx                         = 0;
     ppu->pending_cycles             = 0;
     ppu->scanline_dot_counter       = 0;
-    ppu->m_ppu_mode_switched        = 1;
+    ppu->m_ppu_mode_switched        = PPU_MODE_SWITCHED_DEFAULT;
 
     return ppu;
 }
@@ -248,7 +274,8 @@ void ppu_destroy(GB_ppu_t *ppu) {
     if (ppu == NULL) return;
 
     oambuffer_destroy(ppu->oam_buffer);
-    pixelfetcher_destroy(ppu->pixel_fetcher);
+    pixelfetcher_destroy(ppu->bg_fetcher);
+    pixelfetcher_destroy(ppu->obj_fetcher);
     GB_lcd_destroy(ppu->lcd);
     free(ppu);
 }
@@ -264,25 +291,25 @@ void pixelfetcher_get_tile_id(GB_gameboy_t *gb) {
 
     if (SHOW_WIN) {
         tilemap =  LCDC_WIN_MAP ? 0x9C00 : 0x9800;
-        x       = ( PIXEL_FETCHER->x ) & 0x1F;
-        y       = ( PIXEL_FETCHER->window_line_counter );
+        x       = BG_FETCHER->x & 0x1F;
+        y       = BG_FETCHER->window_line_counter;
     } else {
         tilemap = LCDC_BG_MAP ? 0x9C00 : 0x9800;
-        x       = ( ( SCX / 8 ) + PIXEL_FETCHER->x ) & 0x1F;
+        x       = ( ( SCX / 8 ) + BG_FETCHER->x ) & 0x1F;
         y       = ( LY + SCY ) & 0xFF; 
     }
 
     offset  = ( x + 32 * ( y / 8 ) );
 
-    PIXEL_FETCHER->tile_id = GB_mem_read(gb, tilemap+offset);
-    PIXEL_FETCHER->x++;
-    PIXEL_FETCHER->y = y;
+    BG_FETCHER->tile_id = GB_mem_read(gb, tilemap+offset);
+    BG_FETCHER->x++;
+    BG_FETCHER->y = y;
 }
 
 BYTE pixelfetcher_get_tile_data(GB_gameboy_t *gb, int high) {
     int addr = 0x8000;
-    int tile_id = PIXEL_FETCHER->tile_id;
-    int offset  = SHOW_WIN ? PIXEL_FETCHER->window_line_counter : LY + SCY;
+    int tile_id = BG_FETCHER->tile_id;
+    int offset  = SHOW_WIN ? BG_FETCHER->window_line_counter : LY + SCY;
 
     if (!LCDC_BG_EN) {
         return 0x00;
@@ -299,37 +326,43 @@ BYTE pixelfetcher_get_tile_data(GB_gameboy_t *gb, int high) {
 }
 
 void pixelfetcher_push(GB_gameboy_t *gb) {
-    if (pixelfifo_empty(PIXEL_FETCHER->bg_fifo)) {
-        pixelfifo_push_row( PIXEL_FETCHER->bg_fifo, 
-                            PIXEL_FETCHER->tile_data_high, 
-                            PIXEL_FETCHER->tile_data_low );
-        PIXEL_FETCHER->status=0;
+    if (pixelfifo_empty(BG_FETCHER->fifo)) {
+        pixelfifo_push_row( BG_FETCHER->fifo, 
+                            BG_FETCHER->tile_data_high, 
+                            BG_FETCHER->tile_data_low,
+                            0, 0, 0, 0 );
+        BG_FETCHER->status=0;
     }
 }
 
-#define PIXEL_FETCHER_RESET() do {                                  \
-    pixelfifo_clear(PIXEL_FETCHER->bg_fifo);                        \
-    PIXEL_FETCHER->x                        = 0;                    \
-    PIXEL_FETCHER->y                        = 0;                    \
-    PIXEL_FETCHER->status                   = 0;                    \
+#define PIXEL_FETCHER_RESET(fetcher) do {                                           \
+    pixelfifo_clear(fetcher->fifo);                                                 \
+    fetcher->x                      = 0;                                            \
+    fetcher->y                      = 0;                                            \
+    fetcher->status                 = 0;                                            \
+    fetcher->tile_id                = 0;                                            \
+    fetcher->tile_data_low          = 0;                                            \
+    fetcher->tile_data_high         = 0;                                            \
+    fetcher->sprite_addr            = 0;                                            \
+    fetcher->last_sprite_x_end      = 0;                                            \
 } while(0)
 
-void pixel_fetch(GB_gameboy_t *gb) {
+void bg_fetch(GB_gameboy_t *gb) {
     // Advance one step every 2-dot
-    if (PIXEL_FETCHER->status < 3) {
+    if (BG_FETCHER->status < 3) {
         if (PENDING_CYCLES < 2) return;
         PENDING_CYCLES -= 2;
     }
 
-    switch (PIXEL_FETCHER->status++) {
+    switch (BG_FETCHER->status++) {
         case FETCHER_GET_TILE_ID: 
             pixelfetcher_get_tile_id(gb);
             break;
         case FETCHER_GET_DATA_LOW:
-            PIXEL_FETCHER->tile_data_low = pixelfetcher_get_tile_data(gb, 0);
+            BG_FETCHER->tile_data_low = pixelfetcher_get_tile_data(gb, 0);
             break;
         case FETCHER_GET_DATA_HIGH:
-            PIXEL_FETCHER->tile_data_high = pixelfetcher_get_tile_data(gb, 1);
+            BG_FETCHER->tile_data_high = pixelfetcher_get_tile_data(gb, 1);
             break;
         default: /* Try push */
             pixelfetcher_push(gb);
@@ -337,40 +370,135 @@ void pixel_fetch(GB_gameboy_t *gb) {
     }
 }
 
+void sprite_fetch(GB_gameboy_t *gb) {
+    if (!LCDC_OBJ_EN) return;
+
+    // Here we check for the object to fetch
+    int i = 0;
+    while (!OBJ_FETCHER->sprite_addr && i < OAMBUFFER->buf_size) {
+        WORD addr = 0xFE00 | OAMBUFFER->buffer[i];
+        if ( addr <= 0xFE9F && ( GB_mem_read(gb, addr+1) <= ( LX + 8 ) ) ) {
+            OBJ_FETCHER->sprite_addr = addr;
+            OAMBUFFER->buffer[i] = 0xFF;
+            break;
+        }
+
+        i++;
+    }
+
+    if (!OBJ_FETCHER->sprite_addr || PENDING_CYCLES++ < 2) return;
+    PENDING_CYCLES-=2;
+
+    BYTE attr   = GB_mem_read(gb, OBJ_FETCHER->sprite_addr+3);
+    BYTE flip_y = ( attr >> 6 ) & 1;
+    int offset  = ( LY + SCY ) % 8;
+
+    // If flip vertically, we fetch in reverse
+    if (flip_y) {
+        offset = 7 - offset;
+    }
+    offset *= 2;
+
+    switch (OBJ_FETCHER->status++) {
+        case FETCHER_GET_TILE_ID:
+            OBJ_FETCHER->tile_id = GB_mem_read(gb, OBJ_FETCHER->sprite_addr+2);
+
+            if (LCDC_OBJ_SIZE) {
+                // Check if fetch new 8x16 sprite
+                if (OBJ_FETCHER->sprite_tall_ly_start < 0) {
+                    OBJ_FETCHER->sprite_tall_ly_start = LY;
+                }
+                
+                int line_diff = LY - OBJ_FETCHER->sprite_tall_ly_start;
+                int cur_tile = line_diff / 8; // 0 for top tile and 1 for bottom tile
+
+                if (flip_y) cur_tile = !cur_tile;
+                OBJ_FETCHER->tile_id = ( OBJ_FETCHER->tile_id & 0xFE ) | cur_tile;
+
+                // 8x16 sprite's end
+                if (line_diff > 15) {
+                    OBJ_FETCHER->sprite_tall_ly_start = -1;
+                }
+            }
+            break;
+        case FETCHER_GET_DATA_LOW:
+            OBJ_FETCHER->tile_data_low  = GB_mem_read(gb, 0x8000 + OBJ_FETCHER->tile_id*16     + offset );
+            break;
+        case FETCHER_GET_DATA_HIGH:
+            OBJ_FETCHER->tile_data_high = GB_mem_read(gb, 0x8000 + OBJ_FETCHER->tile_id*16 + 1 + offset );
+            break;
+        default: {
+            BYTE palette    = ( attr >> 4 ) & 1;
+            BYTE priority   = ( attr >> 7 ) & 1;
+            BYTE flip_x     = ( attr >> 5 ) & 1;
+            BYTE data_high  = OBJ_FETCHER->tile_data_high;
+            BYTE data_low   = OBJ_FETCHER->tile_data_low;
+
+            int overlap_offset = 0;
+            if (LX < OBJ_FETCHER->last_sprite_x_end) {
+                overlap_offset = OBJ_FETCHER->last_sprite_x_end - LX;
+            }
+
+            pixelfifo_push_row( OBJ_FETCHER->fifo, 
+                                data_high, 
+                                data_low,
+                                palette,
+                                priority,
+                                flip_x,
+                                overlap_offset );
+
+            OBJ_FETCHER->sprite_addr        = 0;
+            OBJ_FETCHER->status             = 0;
+            OBJ_FETCHER->last_sprite_x_end  = LX+8;
+        }
+            break;
+    }
+}
+
 static const char *colors[] = { "█", "▒", "░", " " }; 
 void ppu_render(GB_gameboy_t *gb) {
-    if (pixelfifo_empty(BG_FIFO)) return;
+    if (pixelfifo_empty(BG_FETCHER->fifo)) return;
 
-    BYTE color_id, palette_id, bg_priority;
+    BYTE color_id, bg_priority;
+    BYTE palette, color_index;
 
-    pixelfifo_pop(PIXEL_FETCHER->bg_fifo, &color_id, &palette_id, &bg_priority);
-    /* TODO: sprite pop */
+    pixelfifo_pop(BG_FETCHER->fifo, &color_id, NULL, &bg_priority);
+    palette = BGP;
+    
+    if (OBJ_FETCHER->fifo->size > 0) {
+        BYTE cid, pid, bgp;
+        pixelfifo_pop(OBJ_FETCHER->fifo, &cid, &pid, &bgp);
 
+        if ( cid && !( bgp && color_id ) ) {
+            palette = GB_mem_read(gb, 0xFF48+pid);
+            color_id = cid;
+        }
+    }
+
+    // A color value being stored in 2 bits,
+    // we just need to shift the palette byte 
+    // by 2 times the color id resulting in a
+    // maximum of 6 bits shifted
+    color_index = ( palette >> (color_id * 2) ) & 3;
+
+    // BG Scrolling penality
     if ( LX >= (SCX % 8) ) {
-        GB_lcd_set_pixel(gb->ppu->lcd, NB_RENDERED_PIXELS, LY, color_id);
+        GB_lcd_set_pixel(gb->ppu->lcd, NB_RENDERED_PIXELS, LY, color_index);
     }
 
     LX++;
     SCANLINE_DOT_COUNTER++;
 
-    if (!PIXEL_FETCHER->draw_window && SHOW_WIN) {
-        PIXEL_FETCHER_RESET();
-        PIXEL_FETCHER->draw_window = 1;
+    if (!BG_FETCHER->draw_window && SHOW_WIN) {
+        PIXEL_FETCHER_RESET(BG_FETCHER);
+        BG_FETCHER->draw_window = 1;
     } 
 }
 
-// Aimed to be called right before exiting mode callback
-#define CHECK_SCANLINE_ENDED(if_ended_statement) do {           \
-    if (SCANLINE_DOT_COUNTER >= PPU_DOTS_PER_SCANLINE) {        \
-        LX = 0;                                                 \
-        LY++;                                                   \
-        SCANLINE_DOT_COUNTER = 0;                               \
-        if_ended_statement;                                     \
-    }                                                           \
-} while(0)
-
 void ppu_oamsearch(GB_gameboy_t *gb) {
     if ( PPU_MODE_SWITCHED ) {
+        OAMBUFFER_CLEAR();
+
         SET_STAT(2, LY == LYC);
         if (LY == LYC && LYC_INT) {
             REQUEST_INTERRUPT(IF_LCD);
@@ -379,24 +507,43 @@ void ppu_oamsearch(GB_gameboy_t *gb) {
         if ( MODE2_INT ) REQUEST_INTERRUPT(IF_LCD);
     }
 
-    // SOME CODE ... 
+    if (PENDING_CYCLES++ < 2) return;
+    PENDING_CYCLES-=2;
+
+    if (LCDC_OBJ_EN && OAMBUFFER->buf_size < 10) {
+        BYTE y = GB_mem_read(gb, OAMBUFFER->cur_oam_addr);
+        BYTE x = GB_mem_read(gb, OAMBUFFER->cur_oam_addr+1);
+
+        if (x > 0 && 
+            ( LY + 16 ) >= y &&
+            ( LY + 16 ) < ( y + (LCDC_OBJ_SIZE+1) * 8 ) ) {
+            OAMBUFFER->buffer[OAMBUFFER->buf_size++] = OAMBUFFER->cur_oam_addr & 0xFF;
+        }
+
+        OAMBUFFER->cur_oam_addr+=4; // Note: Skip 4 bytes meta-data
+    }
 
     if (++SCANLINE_DOT_COUNTER >= 80) {
         SET_PPU_MODE(PPU_MODE_DRAW);
 
         if (WY <= LY && WX-7 <= 160) {
-            PIXEL_FETCHER->window_line_counter++;
+            BG_FETCHER->window_line_counter++;
         }
     }
 }
 
 void ppu_draw(GB_gameboy_t *gb) {
-    pixel_fetch(gb);
-    ppu_render(gb);
+    sprite_fetch(gb);
+
+    if (!OBJ_FETCHER->sprite_addr) {
+        bg_fetch(gb);
+        ppu_render(gb);
+    }
 
     // Finish drawing if 160 have been drawn or 289 dots consumed
     if ( NB_RENDERED_PIXELS >= 160 || SCANLINE_DOT_COUNTER >= 289 ) {
-        PIXEL_FETCHER_RESET();
+        PIXEL_FETCHER_RESET(BG_FETCHER);
+        PIXEL_FETCHER_RESET(OBJ_FETCHER);
         SET_PPU_MODE(PPU_MODE_HBLANK);
     }
 }
@@ -404,7 +551,7 @@ void ppu_draw(GB_gameboy_t *gb) {
 void ppu_hblank(GB_gameboy_t *gb) {
     if ( PPU_MODE_SWITCHED ) {
         if (MODE0_INT) REQUEST_INTERRUPT(IF_LCD);
-        PIXEL_FETCHER->draw_window = 0;
+        BG_FETCHER->draw_window = 0;
     }
 
     if ( ++SCANLINE_DOT_COUNTER >= PPU_DOTS_PER_SCANLINE ) {
@@ -431,9 +578,10 @@ void ppu_vblank(GB_gameboy_t *gb) {
         GB_lcd_clear(gb->ppu->lcd);
         GB_lcd_render(gb->ppu->lcd);
 
-        PIXEL_FETCHER->window_line_counter = -1;
+        BG_FETCHER->window_line_counter = WINDOW_LINE_COUNTER_DEFAULT;
     }
 
+    // Scanline start
     if ( !SCANLINE_DOT_COUNTER ) {
         SET_STAT(2, LY == LYC);
         if (LY == LYC && LYC_INT) {
@@ -441,8 +589,14 @@ void ppu_vblank(GB_gameboy_t *gb) {
         }
     }
 
-    CHECK_SCANLINE_ENDED();
+    // Scanline end
+    if (SCANLINE_DOT_COUNTER >= PPU_DOTS_PER_SCANLINE) {
+        LX = 0;                                         
+        LY++;                                           
+        SCANLINE_DOT_COUNTER = 0;                       
+    }                                                   
 
+    // VBLANK end
     if (LY > MAX_LY) {
         LX = 0;
         LY = 0;
@@ -454,7 +608,7 @@ void ppu_vblank(GB_gameboy_t *gb) {
 }
 
 void ppu_tick(GB_gameboy_t *gb) {
-    if (gb == NULL || gb->ppu == NULL) return;
+    if (!LCDC_LCD_EN || gb == NULL || gb->ppu == NULL) return;
 
     for ( int i = 0; i < 4; i++) {
         PENDING_CYCLES++;
