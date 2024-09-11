@@ -35,32 +35,27 @@ void halt_bug_handler(GB_gameboy_t *gb, int intreq) {
 
     // HALT precedeed by EI
     if (PREV_IR == 0xFB) {
-        PC--;
         PUSH_PC();              // 2 M-cycles
         PROCESS_INTERRUPTS();   // 1 M-cycle
         return;
-    } 
-    // HALT followed by RST
-    if ( (next_ir & 0xC7) == 0xC7 ) {
-        // rst will push its addr
-        gb->cpu->m_is_halted = 0;
-    } else {
-        // read next byte twice
     }
+
+    // RST and byte read twice cases handled
+    // in FETCH_CYCLE by checking m_halt_bug
+    
     gb->cpu->m_is_halted = 0;
     gb->cpu->m_halt_bug  = 1;
-    
 }
 
 void GB_handle_interrupt(GB_gameboy_t *gb) {
-    int intreq = IE & IF;
+    int intreq = IE & IF & 0x1F;
 
     if (!intreq) return;
 
     // Wait 2 M-cycles
     INC_CYCLE(2);
 
-    if (!_IME && IR == 0x76) {
+    if ( !_IME && IR == 0x76 /* HALT */ ) {
         halt_bug_handler(gb, intreq);
     } else if (_IME) {
         PUSH_PC();                  // 2 M-cycles
