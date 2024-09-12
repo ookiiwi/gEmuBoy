@@ -4,6 +4,9 @@
 #include "ppu.h"
 #include "mmu.h"
 
+#define IE (gb->memory[GB_IE_ADDR])
+#define IF (gb->memory[GB_IF_ADDR])
+
 static const int INTERRUPT_VECTOR[] = {
     0x40,
     0x48,
