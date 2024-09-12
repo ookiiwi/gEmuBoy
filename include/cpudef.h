@@ -28,9 +28,4 @@
 
 #define _IME    (gb->cpu->m_IME)
 
-#define DIV     (gb->memory[0xFF04])
-#define TIMA    (gb->memory[0xFF05])
-#define TMA     (gb->memory[0xFF06])
-#define TAC     (gb->memory[0xFF07])
-
 #endif
