@@ -2,14 +2,14 @@
 #define TIMER_H_
 
 #include "defs.h"
-#include "cputype.h"
+#include "gbtypes.h"
 
 #include <stdlib.h>
 
 typedef struct {
     WORD m_sysclk;
     int last_tima_inc_val;
-    int m_tima_overflow_cycle;
+    int m_tima_state;
 } GB_timer_t;
 
 static inline GB_timer_t *GB_timer_create() {
@@ -31,7 +31,7 @@ static inline void GB_timer_destroy(GB_timer_t *timer) {
 #define TIMER_CHECK_WRITE(gb, addr, data) do {                      \
     /* Checks if TIMA is written during the M-cycle delay */        \
     if (addr == 0xFF05) {                                           \
-        gb->cpu->m_timer->m_tima_overflow_cycle = 0;                \
+        gb->cpu->m_timer->m_tima_state = 0;                         \
     } else if (addr == 0xFF04) { /* DIV */                          \
         data = 0;                                                   \
         gb->cpu->m_timer->m_sysclk = 0;                             \
