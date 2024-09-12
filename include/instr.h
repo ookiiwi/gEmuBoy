@@ -376,6 +376,7 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
     WORD rr = RP2;                          			\
     SP--; WRITE_MEMORY(SP, MSB(rr)); /* M2/M3 */		\
     SP--; WRITE_MEMORY(SP, LSB(rr)); /* M4 */   		\
+    INC_CYCLE();                                        \
 } while(0)
 
 /**
