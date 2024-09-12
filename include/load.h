@@ -3,7 +3,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include "cputype.h"
+#include "gbtypes.h"
 
 #define LOADROM_FAIL_OPEN   (-1)
 #define LOADROM_FAIL_ALLOC  (-2)
