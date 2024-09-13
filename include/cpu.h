@@ -7,8 +7,9 @@ extern "C" {
 
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
 
-#include "cputype.h"
+#include "gbtypes.h"
 #include "log.h"
 #include "load.h"
 #include "timer.h"
@@ -61,7 +62,7 @@ typedef struct {
     int                 m_is_halted;
     int                 m_halt_bug;
     int                 m_is_stopped;
-    unsigned            m_cycle_counter;
+    uint64_t            m_cycle_counter;
     GB_timer_t         *m_timer;
 
 #ifdef ENABLE_GAMEBOY_DOCTOR_SETUP
