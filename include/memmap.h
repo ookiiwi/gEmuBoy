@@ -44,7 +44,7 @@
 #define GB_BGP_ADDR                         (0xFF47)
 #define GB_OBP0_ADDR                        (0xFF48)
 #define GB_OBP1_ADDR                        (0xFF49)
-#define GB_BOOT_ROM_DISABLED_ADDR           (0xFF50)
+#define GB_BOOT_ROM_UNMAP_ADDR              (0xFF50)
 
 #define GB_JOYP                             (gb->memory[GB_JOYP_ADDR]                   & 0xFF)
 #define GB_SB                               (gb->memory[GB_SB_ADDR]                     & 0xFF)
@@ -85,5 +85,6 @@
 #define GB_SCX                              (gb->memory[GB_SCX_ADDR]                    & 0xFF)
 #define GB_WY                               (gb->memory[GB_WY_ADDR]                     & 0xFF)
 #define GB_WX                               (gb->memory[GB_WX_ADDR]                     & 0xFF)
+#define GB_BOOT_ROM_UNMAPPED                (gb->memory[GB_BOOT_ROM_UNMAP_ADDR]         != 0  )
 
 #endif
