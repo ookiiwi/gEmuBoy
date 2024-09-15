@@ -15,6 +15,7 @@ struct GB_gameboy_s {
     BYTE        *rom;
     size_t      rom_size;
 
+	GB_mmu_t 	*mmu;
     GB_clock_t  *clock;
 };
 

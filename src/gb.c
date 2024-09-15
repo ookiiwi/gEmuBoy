@@ -2,6 +2,7 @@
 #include "load.h"
 #include "decode.h"
 #include "log.h"
+#include "mmu.h"
 #include "timer.h"
 #include "memmap.h"
 #include "lcd.h"
@@ -41,6 +42,7 @@ GB_gameboy_t* GB_create(const char *src_rom_path) {
     gb->ppu     = NULL;
     gb->memory  = NULL;
     gb->rom     = NULL;
+	gb->mmu 	= NULL;
     gb->clock   = NULL;
 
     if (gb == NULL) {
@@ -61,6 +63,11 @@ GB_gameboy_t* GB_create(const char *src_rom_path) {
     if (gb->clock == NULL) {
         return NULL;
     }
+
+	gb->mmu = GB_mmu_create();
+	if (gb->mmu == NULL) {
+		return NULL;
+	}
 
     int rv = loadrom(src_rom_path, &gb->rom, &gb->rom_size);     
 
@@ -91,6 +98,7 @@ void GB_destroy(GB_gameboy_t *gb) {
     if (gb == NULL) return;
 
     GB_clock_destroy(gb->clock);
+	GB_mmu_destroy(gb->mmu);
 #ifndef NO_PPU
     ppu_destroy(gb->ppu);
 #endif
