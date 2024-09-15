@@ -2,15 +2,17 @@
 #define DEFS_H_
 
 typedef struct GB_gameboy_s GB_gameboy_t;
+typedef struct GB_mmu_s GB_mmu_t;
 
 #define GET_MACRO(_0, _1, NAME, ...) NAME
-#define _INC_CYCLE0() do {                                              \
-    (gb->cpu)->m_cycle_counter+=4;                                      \
-    ppu_tick(gb);                                                       \
-    GB_update_timer(gb);                                                \
+#define _INC_CYCLE0() do {                                              															\
+    gb->cpu->m_cycle_counter+=4;                                        															\
+	GB_dma_run(gb); 																												\
+    ppu_tick(gb);                                                       															\
+    GB_update_timer(gb);                                                															\
 } while(0)
-#define _INC_CYCLE1(step)     for (int i = 0; i < step; i++) _INC_CYCLE0()
-#define INC_CYCLE(...)    GET_MACRO(_0, ##__VA_ARGS__, _INC_CYCLE1, _INC_CYCLE0)(__VA_ARGS__)
+#define _INC_CYCLE1(step)   for (int i = 0; i < step; i++) _INC_CYCLE0()
+#define INC_CYCLE(...)      GET_MACRO(_0, ##__VA_ARGS__, _INC_CYCLE1, _INC_CYCLE0)(__VA_ARGS__)
 
 #define FETCH_CYCLE() do {                                                                                                          \
     LOG_CPU_STATE();                                                                                                                \
