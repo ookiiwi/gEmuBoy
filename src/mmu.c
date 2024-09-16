@@ -2,7 +2,7 @@
 #include "defs.h"
 #include "timer.h"
 #include "memmap.h"
-#include <malloc/_malloc.h>
+#include "cpudef.h"
 
 enum DMA_STATE {
 	DMA_STOP,
@@ -21,6 +21,7 @@ enum DMA_STATE {
 struct GB_mmu_s {
 	int dma_state;
 	int dma_offset;
+	int is_dma_active; // Whether dma is running regardless of its state
 	int dma_restart_cntdown;
 	WORD dma_source;
 
@@ -61,7 +62,7 @@ void GB_mmu_destroy(GB_mmu_t *mmu) {
 } while (0)
 
 BYTE GB_mem_read(GB_gameboy_t *gb, int addr) {
-	if (gb->mmu->dma_state == DMA_RUNNING) {
+	if (gb->mmu->is_dma_active) {
 		// TODO: DMA conflicts
 
 		if (addr >= OAM_START_ADDR && addr <= OAM_END_ADDR) {
@@ -109,15 +110,18 @@ void GB_dma_run(GB_gameboy_t *gb) {
     		break; 													
 		case DMA_INIT:
 			gb->mmu->dma_source = ( gb->memory[DMA_SOURCE_ADDR] << 8 );
-    		gb->mmu->dma_state = DMA_RUNNING; 						
+    		gb->mmu->dma_state 		= DMA_RUNNING; 						
+			gb->mmu->is_dma_active 	= 1;
+			gb->mmu->dma_offset 	= 0;
+			// NOTE: break is omitted on purpose
     	case DMA_RUNNING: {
 			gb->mmu->addr_bus = OAM_START_ADDR | gb->mmu->dma_offset;
 			MEMREAD(gb, (gb->mmu->dma_source | gb->mmu->dma_offset), gb->mmu->data_bus);
-
     		gb->memory[gb->mmu->addr_bus] = gb->mmu->data_bus;
     		if (++gb->mmu->dma_offset > ( OAM_END_ADDR & 0xFF ) ) { 	
-    			gb->mmu->dma_state 	= DMA_STOP; 						
-				gb->mmu->dma_offset = 0;
+    			gb->mmu->dma_state 		= DMA_STOP; 						
+				gb->mmu->dma_offset 	= 0;
+				gb->mmu->is_dma_active 	= 0;
     		} 			
 		}
     		break;												
