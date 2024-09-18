@@ -1,5 +1,5 @@
 #include "lcd.h"
-#include "cputype.h"
+#include "gbtypes.h"
 #include "win_utils.h"
 
 #include <SDL.h>
@@ -10,8 +10,8 @@
 
 #define VIEWPORT_HEIGHT (144)
 #define VIEWPORT_WIDTH  (160)
-#define WINDOW_HEIGHT   ( VIEWPORT_HEIGHT * 2 )
-#define WINDOW_WIDTH    ( VIEWPORT_WIDTH  * 2 )
+#define WINDOW_HEIGHT   ( VIEWPORT_HEIGHT * 3 )
+#define WINDOW_WIDTH    ( VIEWPORT_WIDTH  * 3 )
 
 struct GB_LCD_s {
     GB_window_t *context;
