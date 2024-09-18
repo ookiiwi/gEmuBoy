@@ -1,5 +1,5 @@
 #include "gb.h"
-#include "load.h"
+#include "cartridge.h"
 #include "decode.h"
 #include "log.h"
 #include "mmu.h"
@@ -41,6 +41,7 @@ GB_gameboy_t* GB_create(const char *src_rom_path) {
     gb->cpu     = NULL;
     gb->ppu     = NULL;
     gb->memory  = NULL;
+	gb->header  = NULL;
     gb->rom     = NULL;
 	gb->mmu 	= NULL;
     gb->clock   = NULL;
@@ -50,32 +51,51 @@ GB_gameboy_t* GB_create(const char *src_rom_path) {
     }
 
     gb->cpu     = cpu_create();
+    if (gb->cpu == NULL) {
+		GB_destroy(gb);
+        return NULL;
+    }
 #ifndef NO_PPU
     gb->ppu     = ppu_create();
+	if (gb->ppu == NULL) {
+		GB_destroy(gb);
+		return NULL;
+	}
 #endif
     gb->memory  = (BYTE*)( calloc( 0xFFFF, sizeof(BYTE) ) );
 
     if (gb->memory == NULL) {
+		GB_destroy(gb);
         return NULL;
     }
 
     gb->clock   = GB_clock_create();
     if (gb->clock == NULL) {
+		GB_destroy(gb);
         return NULL;
     }
 
 	gb->mmu = GB_mmu_create();
 	if (gb->mmu == NULL) {
+		GB_destroy(gb);
 		return NULL;
 	}
 
-    int rv = loadrom(src_rom_path, &gb->rom, &gb->rom_size);     
+	gb->header = GB_header_create(src_rom_path);
+	if (!gb->header) {
+		GB_destroy(gb);
+		return NULL;
+	}
 
-    if (rv != gb->rom_size) {                                               
+	gb->rom = (BYTE*) ( malloc( sizeof(BYTE) * ROM_SIZE(gb->header) ) );
+	if (!gb->rom) return NULL;
+
+    int rv = GB_cartridge_read_rom(src_rom_path, (void**)&gb->rom, ROM_SIZE(gb->header) );     
+
+    if (rv != ROM_SIZE(gb->header) ) {                                               
         char *errmsg = "FAILED READING PROVIDED ROM";                            
         switch(rv) {                                                             
-            case LOADROM_FAIL_OPEN:     errmsg = "FAILED OPENING ROM";           
-            case LOADROM_FAIL_ALLOC:    errmsg = "FAILED ALLOCATING ROM MEMORY"; 
+            case GB_CARTRIDGE_ERR_FAIL_OPEN:     errmsg = "FAILED OPENING ROM";           
         }                                                                        
         fprintf(stderr, "%s: %s\n", errmsg, src_rom_path);
 
@@ -103,6 +123,8 @@ void GB_destroy(GB_gameboy_t *gb) {
     ppu_destroy(gb->ppu);
 #endif
     cpu_destroy(gb->cpu);
+
+	GB_header_destroy(gb->header);
 
     if (gb->rom)    free(gb->rom);
     if (gb->memory) free(gb->memory);

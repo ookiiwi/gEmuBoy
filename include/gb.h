@@ -4,6 +4,7 @@
 #include "defs.h"
 #include "cpu.h"
 #include "ppu.h"
+#include "cartridge.h"
 
 typedef struct GB_clock_s GB_clock_t;
 
@@ -12,8 +13,8 @@ struct GB_gameboy_s {
     GB_ppu_t    *ppu;
 
     BYTE        *memory;
+	GB_header_t *header;
     BYTE        *rom;
-    size_t      rom_size;
 
 	GB_mmu_t 	*mmu;
     GB_clock_t  *clock;
