@@ -62,7 +62,7 @@ GB_gameboy_t* GB_create(const char *src_rom_path) {
 		return NULL;
 	}
 #endif
-    gb->memory  = (BYTE*)( calloc( 0xFFFF, sizeof(BYTE) ) );
+    gb->memory  = (BYTE*)( calloc( 0xFFFF+1, sizeof(BYTE) ) );
 
     if (gb->memory == NULL) {
 		GB_destroy(gb);

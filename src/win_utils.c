@@ -24,7 +24,7 @@ GB_window_t* GB_window_create(const char *window_id, unsigned window_width, unsi
     context->renderer_width     = renderer_width;
     context->renderer_height    = renderer_height;
 
-    context->pixels = (Uint32*)( malloc(renderer_height * renderer_height * sizeof(Uint32)) );
+    context->pixels = (Uint32*)( malloc(renderer_width * renderer_height * sizeof(Uint32) + 1) );
     if (context->pixels == NULL) {
         free(context);
         return NULL;
@@ -43,6 +43,7 @@ GB_window_t* GB_window_create(const char *window_id, unsigned window_width, unsi
     if (context->renderer == NULL) {
         printf("SDL_CreateRenderer Error: %s\n", SDL_GetError());
         GB_window_destroy(context);
+
 
         return NULL;
     }
