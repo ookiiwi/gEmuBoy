@@ -11,7 +11,6 @@ extern "C" {
 
 #include "gbtypes.h"
 #include "log.h"
-#include "load.h"
 #include "timer.h"
 
 // How to dump: `hexdump -e '16/1 "0x%02x, " "\n"' dmg_boot.bin`
