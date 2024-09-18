@@ -25,7 +25,7 @@ GB_cpu_t* cpu_create() {
 }
 
 void cpu_destroy(GB_cpu_t *cpu) {
-    if (cpu == NULL) 
+    if (cpu == NULL) return; 
     GB_timer_destroy(cpu->m_timer);
 
     free(cpu);
