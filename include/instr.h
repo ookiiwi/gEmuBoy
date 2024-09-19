@@ -1045,10 +1045,10 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
 #define CALL_NN() do {                      			\
     rZ = READ_MEMORY(PC++);                  			\
     rW = READ_MEMORY(PC++);                  			\
+    INC_CYCLE();                            			\
     SP--; WRITE_MEMORY(SP, PCh);            			\
     SP--; WRITE_MEMORY(SP, PCl);            			\
     PC = WZ;                                			\
-    INC_CYCLE();                            			\
 } while(0)
 
 /**
@@ -1062,10 +1062,10 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
     rZ = READ_MEMORY(PC++);                  			\
     rW = READ_MEMORY(PC++);                  			\
     if (CC(OP_Y)) {                         			\
+        INC_CYCLE();                        			\
         SP--; WRITE_MEMORY(SP, PCh);        			\
         SP--; WRITE_MEMORY(SP, PCl);        			\
         PC = WZ;                            			\
-        INC_CYCLE();                        			\
     }                                       			\
 } while(0)
 
