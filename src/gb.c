@@ -1,179 +1,59 @@
 #include "gb.h"
-#include "cartridge.h"
-#include "decode.h"
-#include "log.h"
-#include "mmu.h"
-#include "timer.h"
-#include "memmap.h"
-#include "lcd.h"
+#include "cpudef.h"
 
-#include <SDL.h>
-#include <stdio.h>
+#include <stdlib.h>
 
-#define GB_MSEC_PER_FRAME   (1000/60)
-#define GB_CYCLES_PER_FRAME (4194304/60)
+#define CHECK_ALLOC(var) if (!var) { GB_gameboy_destroy(gb); return NULL;}
+#define ALLOC_BYTE_ARRAY(elt_cnt) ( (BYTE*)( malloc( sizeof (BYTE) * elt_cnt ) ) )
 
-struct GB_clock_s {
-    Uint64  last_tick;
-    Uint64  last_tick_cycle_cnt;
-    Uint64  avg_cycles;
-    int     avg_nb;    
-};
+void gameboy_init(GB_gameboy_t *gb);
 
-GB_clock_t* GB_clock_create() {
-    GB_clock_t *clock = (GB_clock_t*)( malloc(sizeof(GB_clock_t)) );
-    if (clock == NULL) {
-        return NULL;
-    }
+GB_gameboy_t*   GB_gameboy_create(const char *rom_path) {
+    GB_gameboy_t *gb = (GB_gameboy_t*)( malloc( sizeof (GB_gameboy_t) ) );
+    CHECK_ALLOC(gb);
 
-    clock->last_tick            = 0;
-    clock->last_tick_cycle_cnt  = 0;
+    gb->cartridge   = NULL;
+    gb->cpu         = NULL;
+    gb->ppu         = NULL;
+    gb->wram        = NULL;
+    gb->io_regs     = NULL;
+    gb->hram        = NULL;
+    gb->ie          = 0;
 
-    return clock;
-}
+    gb->cartridge = GB_cartridge_create(rom_path);
+    CHECK_ALLOC(gb->cartridge);
 
-void GB_clock_destroy(GB_clock_t *clk) {
-    if (clk) free(clk);
-}
+    gb->cpu = GB_cpu_create();
+    CHECK_ALLOC(gb->cpu);
 
-GB_gameboy_t* GB_create(const char *src_rom_path) {
-    GB_gameboy_t *gb = (GB_gameboy_t*)( malloc( sizeof(GB_gameboy_t) ) );
-    gb->cpu     = NULL;
-    gb->ppu     = NULL;
-    gb->memory  = NULL;
-	gb->header  = NULL;
-    gb->rom     = NULL;
-	gb->mmu 	= NULL;
-    gb->clock   = NULL;
+    gb->ppu = GB_ppu_create();
+    CHECK_ALLOC(gb->ppu);
 
-    if (gb == NULL) {
-        return NULL;
-    }
+    gb->wram = ALLOC_BYTE_ARRAY(WRAM_SIZE);
+    CHECK_ALLOC(gb->wram); 
 
-    gb->cpu     = cpu_create();
-    if (gb->cpu == NULL) {
-		GB_destroy(gb);
-        return NULL;
-    }
-#ifndef NO_PPU
-    gb->ppu     = ppu_create();
-	if (gb->ppu == NULL) {
-		GB_destroy(gb);
-		return NULL;
-	}
-#endif
-    gb->memory  = (BYTE*)( calloc( 0xFFFF+1, sizeof(BYTE) ) );
+    gb->io_regs = ALLOC_BYTE_ARRAY(IO_REGS_SIZE);
+    CHECK_ALLOC(gb->io_regs);
 
-    if (gb->memory == NULL) {
-		GB_destroy(gb);
-        return NULL;
-    }
+    gb->hram = ALLOC_BYTE_ARRAY(HRAM_SIZE);
+    CHECK_ALLOC(gb->hram);
 
-    gb->clock   = GB_clock_create();
-    if (gb->clock == NULL) {
-		GB_destroy(gb);
-        return NULL;
-    }
-
-	gb->mmu = GB_mmu_create();
-	if (gb->mmu == NULL) {
-		GB_destroy(gb);
-		return NULL;
-	}
-
-	gb->header = GB_header_create(src_rom_path);
-	if (!gb->header) {
-		GB_destroy(gb);
-		return NULL;
-	}
-
-	gb->rom = (BYTE*) ( malloc( sizeof(BYTE) * ROM_SIZE(gb->header) ) );
-	if (!gb->rom) return NULL;
-
-    int rv = GB_cartridge_read_rom(src_rom_path, (void**)&gb->rom, ROM_SIZE(gb->header) );     
-
-    if (rv != ROM_SIZE(gb->header) ) {                                               
-        char *errmsg = "FAILED READING PROVIDED ROM";                            
-        switch(rv) {                                                             
-            case GB_CARTRIDGE_ERR_FAIL_OPEN:     errmsg = "FAILED OPENING ROM";           
-        }                                                                        
-        fprintf(stderr, "%s: %s\n", errmsg, src_rom_path);
-
-        GB_destroy(gb);
-        return NULL;                                                   
-    }
-
-#ifdef ENABLE_GAMEBOY_DOCTOR_SETUP
-    CPU_GAMEBOY_DOCTOR_SETUP(src_rom_path);
-#endif  
+    gameboy_init(gb);
 
     return gb;
 }
 
-void GB_destroy(GB_gameboy_t *gb) {
-#ifdef ENABLE_GAMEBOY_DOCTOR_SETUP
-    CPU_GAMEBOY_DOCTOR_CLEANUP();
-#endif
+void GB_gameboy_destroy(GB_gameboy_t *gb) {
+    if (!gb) return;
 
-    if (gb == NULL) return;
-
-    GB_clock_destroy(gb->clock);
-	GB_mmu_destroy(gb->mmu);
-#ifndef NO_PPU
-    ppu_destroy(gb->ppu);
-#endif
-    cpu_destroy(gb->cpu);
-
-	GB_header_destroy(gb->header);
-
-    if (gb->rom)    free(gb->rom);
-    if (gb->memory) free(gb->memory);
-    
-    free(gb);
+    if (gb->hram)       free(gb->hram);
+    if (gb->io_regs)    free(gb->io_regs);
+    if (gb->wram)       free(gb->wram);
+    GB_ppu_destroy(gb->ppu);
+    GB_cpu_destroy(gb->cpu);
+    GB_cartridge_destroy(gb->cartridge);
 }
 
-// DEBUG ONLY
-int GB_clock_avg_cycles(GB_gameboy_t *gb) {
-    return gb->clock->avg_cycles/gb->clock->avg_nb;
-}
-
-int GB_clock_pulse(GB_gameboy_t *gb) {
-    Uint64 tick     = SDL_GetTicks64();
-    Uint64 delta    = tick - gb->clock->last_tick;
-    Uint64 cycles   = gb->cpu->m_cycle_counter - gb->clock->last_tick_cycle_cnt;
-
-    if (cycles < GB_CYCLES_PER_FRAME && delta < GB_MSEC_PER_FRAME) {
-        return 1;
-    }
-
-    if (delta >= GB_MSEC_PER_FRAME) {
-        gb->clock->last_tick = tick;
-        gb->clock->last_tick_cycle_cnt = gb->cpu->m_cycle_counter;
-
-        gb->clock->avg_cycles += cycles;
-        gb->clock->avg_nb++;
-    }
-
-    return 0;
-}
-
-void GB_run(GB_gameboy_t *gb) {
-    while (GB_clock_pulse(gb)) {
-        if (gb->cpu->m_is_halted) {
-            GB_handle_interrupt(gb);
-            INC_CYCLE();
-            return;
-        }
-
-        DECODE();
-
-        // fetch
-        FETCH_CYCLE();
-
-        // ei_delay is assigned 2 by EI instr
-        // This allows IME to be set only after one instruction has passed
-        if (gb->cpu->m_ei_delay) {
-            _IME |= (gb->cpu->m_ei_delay--) & 1;
-        }
-    }
+void gameboy_init(GB_gameboy_t *gb) {
+    PC = 0x100;
 }

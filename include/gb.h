@@ -1,30 +1,27 @@
-#ifndef GB_H_
-#define GB_H_
+#ifndef GB_GAMEBOY_H_
+#define GB_GAMEBOY_H_
 
-#include "defs.h"
-#include "cpu.h"
-#include "ppu.h"
-#include "cartridge.h"
+#include "cpu/cpu.h"
+#include "cartridge/cartridge.h"
+#include "graphics/ppu.h"
 
-typedef struct GB_clock_s GB_clock_t;
+#define WRAM_SIZE       (0x2000)
+#define IO_REGS_SIZE    (0x0080)
+#define HRAM_SIZE       (0x007F)
 
 struct GB_gameboy_s {
-    GB_cpu_t    *cpu;
-    GB_ppu_t    *ppu;
+    GB_cartridge_t  *cartridge;
+    GB_cpu_t        *cpu;
+    GB_ppu_t        *ppu;
 
-    BYTE        *memory;
-	GB_header_t *header;
-    BYTE        *rom;
-
-	GB_mmu_t 	*mmu;
-    GB_clock_t  *clock;
+    // Registers
+    BYTE    *wram;      // C000-DFFF
+    BYTE    *io_regs;   // FF00-FF7F
+    BYTE    *hram;      // FF80-FFFE
+    BYTE    ie;         // FFFF
 };
 
-GB_gameboy_t*   GB_create(const char *src_rom_path);
-void            GB_destroy(GB_gameboy_t *gb);
-void            GB_run(GB_gameboy_t *gb);
-
-// DEBUG ONLY
-int GB_clock_avg_cycles(GB_gameboy_t *gb);
+GB_gameboy_t*   GB_gameboy_create(const char *rom_path);
+void            GB_gameboy_destroy(GB_gameboy_t *gb);
 
 #endif
