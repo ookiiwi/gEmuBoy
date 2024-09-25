@@ -10,20 +10,16 @@ find_package(SDL2 REQUIRED)
 
 include(cmake/ProjectExtra.cmake)
 
-add_executable(${PROJECT_NAME}  src/main.c 
-                                src/cpu.c 
-                                src/ppu.c 
-                                src/mmu.c 
-                                src/gb.c 
-                                src/lcd.c 
-                                src/debugger.c 
-                                src/log.c
-                                src/interrupt.c
-                                src/timer.c
-                                src/win_utils.c 
-								src/cartridge.c )
+add_executable(${PROJECT_NAME}  src/main.c
+                                src/cartridge/cartridge.c
+                                src/cartridge/mbc.c
+                                src/cpu/cpu.c
+                                src/cpu/timer.c
+                                src/cpu/interrupt.c
+                                src/graphics/ppu.c
+                                src/gb.c
+                                src/mmu.c
+                                src/log.c )
 target_include_directories(${PROJECT_NAME} PRIVATE include/)
-#target_compile_definitions(${PROJECT_NAME} PUBLIC ENABLE_GAMEBOY_DOCTOR_SETUP)
-#target_compile_definitions(${PROJECT_NAME} PUBLIC NO_PPU)
 target_compile_definitions(${PROJECT_NAME} PUBLIC DEBUG_LOG_DIR="${CMAKE_SOURCE_DIR}/logs/")
 target_link_libraries(${PROJECT_NAME} PRIVATE ProjectExtra SDL2::SDL2)
