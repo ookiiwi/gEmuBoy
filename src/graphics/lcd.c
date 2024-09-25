@@ -1,5 +1,5 @@
 #include "lcd.h"
-#include "gbtypes.h"
+#include "type.h"
 #include "win_utils.h"
 
 #include <SDL.h>
@@ -43,7 +43,7 @@ void GB_lcd_destroy(GB_LCD_t *lcd) {
     free(lcd);
 }
 
-static const int gb_colors[] = { 255, 211, 169, 0 };
+static const int gb_colors[] = { 0xFF, 0xAA, 0x55, 0x00 };
 
 void GB_lcd_set_pixel(GB_LCD_t *lcd, int x, int y, int color_id) {
     int color = gb_colors[color_id];
