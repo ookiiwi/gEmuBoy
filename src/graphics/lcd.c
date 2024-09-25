@@ -1,4 +1,4 @@
-#include "lcd.h"
+#include "graphics/lcd.h"
 #include "type.h"
 #include "win_utils.h"
 
