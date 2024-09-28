@@ -6,7 +6,9 @@
 
 #include <stddef.h> // size_t
 
+static const int RAM_SIZE_LOOKUP[] = { 0, 0, 8, 32, 128, 64 };
 #define ROM_SIZE(header) ( (32 * 1024UL) * ( 1 << header->rom_size ) )
+#define RAM_SIZE(header) ( (32 * 1024UL) * RAM_SIZE_LOOKUP[header->ram_size] )
 
 typedef struct GB_cartridge_s GB_cartridge_t; 
 typedef BYTE (*cartridge_read_callback)(GB_cartridge_t *, WORD);
@@ -36,6 +38,8 @@ struct GB_cartridge_s {
 	BYTE 						*data;
 	cartridge_read_callback 	read_callback;
 	cartridge_write_callback 	write_callback;
+
+	GB_MBC_t					*mbc;
 };
 
 void 			GB_print_header(GB_header_t *header);
