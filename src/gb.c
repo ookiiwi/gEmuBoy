@@ -3,6 +3,11 @@
 
 #include <stdlib.h>
 
+#define WRAM_SIZE       (0x2000)
+#define UNUSABLE_SIZE   (0x006F)
+#define IO_REGS_SIZE    (0x0080)
+#define HRAM_SIZE       (0x007F)
+
 #define CHECK_ALLOC(var) if (!var) { GB_gameboy_destroy(gb); return NULL;}
 #define ALLOC_BYTE_ARRAY(elt_cnt) ( (BYTE*)( malloc( sizeof (BYTE) * elt_cnt ) ) )
 
@@ -32,6 +37,9 @@ GB_gameboy_t*   GB_gameboy_create(const char *rom_path) {
     gb->wram = ALLOC_BYTE_ARRAY(WRAM_SIZE);
     CHECK_ALLOC(gb->wram); 
 
+    gb->unusable = ALLOC_BYTE_ARRAY(UNUSABLE_SIZE);
+    CHECK_ALLOC(gb->unusable);
+
     gb->io_regs = ALLOC_BYTE_ARRAY(IO_REGS_SIZE);
     CHECK_ALLOC(gb->io_regs);
 
@@ -48,6 +56,7 @@ void GB_gameboy_destroy(GB_gameboy_t *gb) {
 
     if (gb->hram)       free(gb->hram);
     if (gb->io_regs)    free(gb->io_regs);
+    if (gb->unusable)   free(gb->unusable);
     if (gb->wram)       free(gb->wram);
     GB_ppu_destroy(gb->ppu);
     GB_cpu_destroy(gb->cpu);

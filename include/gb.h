@@ -5,10 +5,6 @@
 #include "cartridge/cartridge.h"
 #include "graphics/ppu.h"
 
-#define WRAM_SIZE       (0x2000)
-#define IO_REGS_SIZE    (0x0080)
-#define HRAM_SIZE       (0x007F)
-
 struct GB_gameboy_s {
     GB_cartridge_t  *cartridge;
     GB_cpu_t        *cpu;
@@ -16,6 +12,7 @@ struct GB_gameboy_s {
 
     // Registers
     BYTE    *wram;      // C000-DFFF
+    BYTE    *unusable;  // FEA0-FEFF
     BYTE    *io_regs;   // FF00-FF7F
     BYTE    *hram;      // FF80-FFFE
     BYTE    ie;         // FFFF
