@@ -5,7 +5,10 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#include <SDL.h>
+
 int main(int argc, char **argv) {
+    int isrunning = 1;
     GB_gameboy_t *gb;
 
     if (argc < 2) {
@@ -19,8 +22,15 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
-    int i = 0;
-    while(i++ < 0x900000) {
+    while(isrunning) {
+        SDL_Event event;
+        while(SDL_PollEvent(&event)) {
+            if (event.type == SDL_QUIT) {
+                isrunning = 0;
+            }
+        }
+
+        if (IR==0x40) {printf("BREAKPOINT\n");}\
         GB_cpu_run(gb);
     }
 
