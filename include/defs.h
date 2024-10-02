@@ -2,6 +2,7 @@
 #define DEFS_H_
 
 typedef struct GB_gameboy_s GB_gameboy_t;
+typedef struct GB_MBC_s GB_MBC_t;
 
 #define INC_CYCLE() do {                                              															    \
     gb->cpu->t_cycle_counter+=4;                                        															\

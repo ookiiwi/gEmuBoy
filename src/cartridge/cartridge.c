@@ -77,11 +77,9 @@ GB_cartridge_t* GB_cartridge_create(const char *path) {
 	cartridge = (GB_cartridge_t*)( malloc( sizeof (GB_cartridge_t) ) );
 	if (!cartridge) { return NULL; }
 
-	cartridge->data = (BYTE*)( malloc( sizeof (BYTE) * fsize ) );
-	if (!cartridge->data) {
-		free(cartridge);
-		return NULL;
-	}
+	cartridge->data 	= NULL;
+	cartridge->header 	= NULL;
+	cartridge->mbc 		= NULL;
 	
 	fp = fopen(path, "rb");
     if (!fp) { 
@@ -93,19 +91,32 @@ GB_cartridge_t* GB_cartridge_create(const char *path) {
     fsize = ftell(fp);
     fseek(fp, 0, SEEK_SET);
 
+	cartridge->data = (BYTE*)( malloc( sizeof (BYTE) * fsize + 1 ) );
+	if (!cartridge->data) {
+    	fclose(fp);
+		free(cartridge);
+		return NULL;
+	}
+
     int rv = fread((void*)(cartridge->data), sizeof(BYTE), fsize, fp);
 
 	cartridge->header = GB_header_create(fp, fsize);
+    fclose(fp);
+
 	if (!cartridge->header) {
 		GB_cartridge_destroy(cartridge);
 		return NULL;
 	}
 
 	// TODO: Set MBC based on header
-	cartridge->read_callback 	= GB_mbc0_read;
-	cartridge->write_callback 	= GB_mbc0_write;
+	cartridge->read_callback 	= GB_mbc1_read;
+	cartridge->write_callback 	= GB_mbc1_write;
 
-    fclose(fp);
+	cartridge->mbc = GB_MBC_create();
+	if (!cartridge->mbc || cartridge->header->cartridge_type > 0x01) {
+		GB_cartridge_destroy(cartridge);
+		return NULL;
+	}
 
     return cartridge;
 
@@ -114,6 +125,7 @@ GB_cartridge_t* GB_cartridge_create(const char *path) {
 void GB_cartridge_destroy(GB_cartridge_t *cartridge) {
 	if (!cartridge) return;
 	if (cartridge->data) free(cartridge->data);
+	GB_MBC_destroy(cartridge->mbc);
 	GB_header_destroy(cartridge->header);
 
 	free(cartridge);
