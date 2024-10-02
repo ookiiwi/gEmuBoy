@@ -5,6 +5,7 @@ typedef struct GB_gameboy_s GB_gameboy_t;
 
 #define INC_CYCLE() do {                                              															    \
     gb->cpu->t_cycle_counter+=4;                                        															\
+    GB_ppu_tick(gb, 4);                                                                                                             \
     GB_timer_update(gb);                                               															    \
 } while(0)
 
