@@ -17,6 +17,8 @@ add_executable(${PROJECT_NAME}  src/main.c
                                 src/cpu/timer.c
                                 src/cpu/interrupt.c
                                 src/graphics/ppu.c
+                                src/graphics/lcd.c
+                                src/win_utils.c
                                 src/gb.c
                                 src/mmu.c
                                 src/log.c )
