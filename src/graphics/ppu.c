@@ -256,11 +256,21 @@ void pixelfetcher_destroy(PixelFetcher *fetcher) {
 }
 
 BYTE GB_ppu_vram_read(GB_ppu_t *ppu, WORD addr) {
+    if (addr < 0x8000 || addr >= 0xA000) {
+        fprintf(stderr, "VRAM READ OUT OF RANGE\n");
+        return 0xFF;
+    }
+
     addr = ( addr - 0x8000 ) & 0x1FFF;
     return ppu->vram[addr];
 }
 
 void GB_ppu_vram_write(GB_ppu_t *ppu, WORD addr, BYTE data) {
+    if (addr < 0x8000 || addr >= 0xA000) {
+        fprintf(stderr, "VRAM WRITE OUT OF RANGE\n");
+        return;
+    }
+
     addr = ( addr - 0x8000 ) & 0x1FFF;
     ppu->vram[addr] = data;
 }
