@@ -36,6 +36,7 @@ typedef struct {
 struct GB_cartridge_s {
 	GB_header_t 				*header;
 	BYTE 						*data;
+	size_t 						data_size;
 	cartridge_read_callback 	read_callback;
 	cartridge_write_callback 	write_callback;
 
