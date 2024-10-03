@@ -1,5 +1,6 @@
 #include "gb.h"
 #include "cpudef.h"
+#include "mmu.h"
 
 #include <stdlib.h>
 
@@ -20,7 +21,9 @@ GB_gameboy_t*   GB_gameboy_create(const char *rom_path) {
     gb->cartridge   = NULL;
     gb->cpu         = NULL;
     gb->ppu         = NULL;
+    gb->mmu         = NULL;
     gb->wram        = NULL;
+    gb->unusable    = NULL;
     gb->io_regs     = NULL;
     gb->hram        = NULL;
     gb->ie          = 0;
@@ -33,6 +36,9 @@ GB_gameboy_t*   GB_gameboy_create(const char *rom_path) {
 
     gb->ppu = GB_ppu_create();
     CHECK_ALLOC(gb->ppu);
+
+    gb->mmu = GB_mmu_create();
+    CHECK_ALLOC(gb->mmu);
 
     gb->wram = ALLOC_BYTE_ARRAY(WRAM_SIZE);
     CHECK_ALLOC(gb->wram); 
@@ -58,6 +64,7 @@ void GB_gameboy_destroy(GB_gameboy_t *gb) {
     if (gb->io_regs)    free(gb->io_regs);
     if (gb->unusable)   free(gb->unusable);
     if (gb->wram)       free(gb->wram);
+    GB_mmu_destroy(gb->mmu);
     GB_ppu_destroy(gb->ppu);
     GB_cpu_destroy(gb->cpu);
     GB_cartridge_destroy(gb->cartridge);
