@@ -9,6 +9,10 @@
 
 static const ssize_t RAM_SIZES[] = { 0, 0, 8, 32, 128, 64 };
 
+#define SET_MBC_CALLBACKS(n) 							\
+	cartridge->read_callback 	= GB_mbc##n##_read;		\
+	cartridge->write_callback 	= GB_mbc##n##_write;
+
 GB_header_t* GB_header_create(FILE *fp, long fsize) {
 	GB_header_t *header;
 
@@ -108,18 +112,24 @@ GB_cartridge_t* GB_cartridge_create(const char *path) {
 		return NULL;
 	}
 
-	// TODO: Set MBC based on header
-	cartridge->read_callback 	= GB_mbc1_read;
-	cartridge->write_callback 	= GB_mbc1_write;
-
 	cartridge->mbc = GB_MBC_create();
-	if (!cartridge->mbc || cartridge->header->cartridge_type > 0x01) {
+	if (!cartridge->mbc) {
 		GB_cartridge_destroy(cartridge);
 		return NULL;
 	}
 
-    return cartridge;
+	switch(cartridge->header->cartridge_type) {
+		case 0: SET_MBC_CALLBACKS(0); break;
+		case 1: SET_MBC_CALLBACKS(1); break;
+		default: 
+			fprintf(stderr, "UNSUPPORTED CARTRIDGE %d\n", cartridge->header->cartridge_type);
+			GB_cartridge_destroy(cartridge);
+			return NULL;
+	}
 
+	cartridge->data_size = fsize;
+
+    return cartridge;
 }
 
 void GB_cartridge_destroy(GB_cartridge_t *cartridge) {

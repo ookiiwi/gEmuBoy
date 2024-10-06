@@ -88,6 +88,7 @@
 #define WINDOW_LINE_COUNTER_DEFAULT     (-1)
 #define SPRITE_TALL_LY_START_DEFAULT    (-1)
 #define OAM_START_ADDR                  (0xFE00)
+#define OAM_END_ADDR                    (0xFE9F)
 #define PPU_MODE_SWITCHED_DEFAULT       (1)
 
 typedef struct PixelFIFO_Cell PixelFIFO_Cell;
@@ -256,11 +257,21 @@ void pixelfetcher_destroy(PixelFetcher *fetcher) {
 }
 
 BYTE GB_ppu_vram_read(GB_ppu_t *ppu, WORD addr) {
+    if (addr < 0x8000 || addr >= 0xA000) {
+        fprintf(stderr, "VRAM READ OUT OF RANGE\n");
+        return 0xFF;
+    }
+
     addr = ( addr - 0x8000 ) & 0x1FFF;
     return ppu->vram[addr];
 }
 
 void GB_ppu_vram_write(GB_ppu_t *ppu, WORD addr, BYTE data) {
+    if (addr < 0x8000 || addr >= 0xA000) {
+        fprintf(stderr, "VRAM WRITE OUT OF RANGE\n");
+        return;
+    }
+
     addr = ( addr - 0x8000 ) & 0x1FFF;
     ppu->vram[addr] = data;
 }
@@ -342,7 +353,7 @@ void pixelfetcher_get_tile_id(GB_gameboy_t *gb) {
 
     offset  = ( x + 32 * ( y / 8 ) );
 
-    BG_FETCHER->tile_id = GB_mem_read(gb, tilemap+offset);
+    BG_FETCHER->tile_id = GB_ppu_vram_read(gb->ppu, tilemap+offset);
     BG_FETCHER->x++;
     BG_FETCHER->y = y;
 }
@@ -363,7 +374,7 @@ BYTE pixelfetcher_get_tile_data(GB_gameboy_t *gb, int high) {
         tile_id = (SIGNED_BYTE)tile_id;
     }
 
-    return GB_mem_read(gb, addr + tile_id*16 + high + 2 * (offset%8) );
+    return GB_ppu_vram_read(gb->ppu, addr + tile_id*16 + high + 2 * (offset%8) );
 }
 
 void pixelfetcher_push(GB_gameboy_t *gb) {
@@ -418,7 +429,7 @@ void sprite_fetch(GB_gameboy_t *gb) {
     int i = 0;
     while (!OBJ_FETCHER->sprite_addr && i < OAMBUFFER->buf_size) {
         WORD addr = 0xFE00 | OAMBUFFER->buffer[i];
-        if ( addr <= 0xFE9F && ( GB_mem_read(gb, addr+1) <= ( LX + 8 ) ) ) {
+        if ( addr <= 0xFE9F && ( GB_ppu_oam_read(gb->ppu, addr+1) <= ( LX + 8 ) ) ) {
             OBJ_FETCHER->sprite_addr = addr;
             OAMBUFFER->buffer[i] = 0xFF;
             break;
@@ -430,7 +441,7 @@ void sprite_fetch(GB_gameboy_t *gb) {
     if (!OBJ_FETCHER->sprite_addr || PENDING_CYCLES++ < 2) return;
     PENDING_CYCLES-=2;
 
-    BYTE attr   = GB_mem_read(gb, OBJ_FETCHER->sprite_addr+3);
+    BYTE attr   = GB_ppu_oam_read(gb->ppu, OBJ_FETCHER->sprite_addr+3);
     BYTE flip_y = ( attr >> 6 ) & 1;
     int offset  = ( LY + SCY ) % 8;
 
@@ -442,7 +453,7 @@ void sprite_fetch(GB_gameboy_t *gb) {
 
     switch (OBJ_FETCHER->status++) {
         case FETCHER_GET_TILE_ID:
-            OBJ_FETCHER->tile_id = GB_mem_read(gb, OBJ_FETCHER->sprite_addr+2);
+            OBJ_FETCHER->tile_id = GB_ppu_oam_read(gb->ppu, OBJ_FETCHER->sprite_addr+2);
 
             if (LCDC_OBJ_SIZE) {
                 // Check if fetch new 8x16 sprite
@@ -463,10 +474,10 @@ void sprite_fetch(GB_gameboy_t *gb) {
             }
             break;
         case FETCHER_GET_DATA_LOW:
-            OBJ_FETCHER->tile_data_low  = GB_mem_read(gb, 0x8000 + OBJ_FETCHER->tile_id*16     + offset );
+            OBJ_FETCHER->tile_data_low  = GB_ppu_vram_read(gb->ppu, 0x8000 + OBJ_FETCHER->tile_id*16     + offset );
             break;
         case FETCHER_GET_DATA_HIGH:
-            OBJ_FETCHER->tile_data_high = GB_mem_read(gb, 0x8000 + OBJ_FETCHER->tile_id*16 + 1 + offset );
+            OBJ_FETCHER->tile_data_high = GB_ppu_vram_read(gb->ppu, 0x8000 + OBJ_FETCHER->tile_id*16 + 1 + offset );
             break;
         default: {
             BYTE palette    = ( attr >> 4 ) & 1;
@@ -546,9 +557,9 @@ void ppu_oamsearch(GB_gameboy_t *gb) {
         if ( MODE2_INT ) REQUEST_INTERRUPT(IF_LCD);
     }
 
-    if (LCDC_OBJ_EN && OAMBUFFER->buf_size < 10 && PENDING_CYCLES++ >= 2) {
-        BYTE y = GB_mem_read(gb, OAMBUFFER->cur_oam_addr);
-        BYTE x = GB_mem_read(gb, OAMBUFFER->cur_oam_addr+1);
+    if (LCDC_OBJ_EN && OAMBUFFER->buf_size < 10 && OAMBUFFER->cur_oam_addr < OAM_END_ADDR && PENDING_CYCLES++ >= 2) {
+        BYTE y = GB_ppu_oam_read(gb->ppu, OAMBUFFER->cur_oam_addr);
+        BYTE x = GB_ppu_oam_read(gb->ppu, OAMBUFFER->cur_oam_addr+1);
 
         if (x > 0 && 
             ( LY + 16 ) >= y &&
