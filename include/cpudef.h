@@ -26,6 +26,6 @@
 #define PC      (gb->cpu->pc.w)
 #define WZ      (gb->cpu->wz.w)
 
-#define _IME    (gb->cpu->m_IME)
+#define _IME    (gb->cpu->IME)
 
 #endif
