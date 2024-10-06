@@ -88,7 +88,7 @@
 #define WINDOW_LINE_COUNTER_DEFAULT     (-1)
 #define SPRITE_TALL_LY_START_DEFAULT    (-1)
 #define OAM_START_ADDR                  (0xFE00)
-#define OAM_END_ADDR                    (0xFE7F)
+#define OAM_END_ADDR                    (0xFE9F)
 #define PPU_MODE_SWITCHED_DEFAULT       (1)
 
 typedef struct PixelFIFO_Cell PixelFIFO_Cell;
