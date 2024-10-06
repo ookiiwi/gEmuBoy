@@ -1,7 +1,7 @@
 #ifndef DECODE_H_
 #define DECODE_H_
 
-#include "instr.h"
+#include "cpu/instr.h"
 
 #define OP_X    (IR >> 6)
 #define OP_Y    ((IR >> 3)  & 7)
