@@ -43,18 +43,18 @@ BYTE GB_mbc0_read(GB_cartridge_t *cartridge, WORD addr) {
     }
 
     //CHECK_BOUNDERIES(0, cartridge->data_size, "MBC0 READ ROM BANK0", 0xFF);
-    return cartridge->data[addr];
+    return cartridge->rom[addr];
 }
 
 void GB_mbc0_write(GB_cartridge_t *cartridge, WORD addr, BYTE data) {
     if (addr < 0x8000) {
         //CHECK_BOUNDERIES(0, cartridge->data_size, "MBC0 WRITE ROM BANK0", );
-        cartridge->data[addr] = data;
+        cartridge->rom[addr] = data;
     } else if (addr > 0x9FFF && addr < 0xC000 && RAM_SIZE(cartridge->header)) {
         addr -= 0x2000;
 
         //CHECK_BOUNDERIES(0, cartridge->data_size, "MBC0 WRITE RAM BANK0", );
-        cartridge->data[addr] = data;
+        cartridge->rom[addr] = data;
     }
 }
 
@@ -94,15 +94,15 @@ BYTE GB_mbc1_read(GB_cartridge_t *cartridge, WORD addr) {
             phys_addr = (ROM_BANK2_NUMBER << 14) | (addr & 0x3FFF);
         }
 
-        CHECK_BOUNDERIES(0, cartridge->data_size, "READ ROM", 0xFF);
+        CHECK_BOUNDERIES(0, cartridge->rom_size, "READ ROM", 0xFF);
 
-        return cartridge->data[phys_addr];
+        return cartridge->rom[phys_addr];
     } else if (addr < 0x8000) {                                         // ROM Bank 01-7F
         phys_addr = (ROM_BANK_NUMBER << 14) | ( addr & 0x3FFF );
 
-        CHECK_BOUNDERIES(0, cartridge->data_size, "READ ROM", 0xFF);
+        CHECK_BOUNDERIES(0, cartridge->rom_size, "READ ROM", 0xFF);
 
-        return cartridge->data[phys_addr];
+        return cartridge->rom[phys_addr];
     } else if (addr > 0x9FFF && addr < 0xC000) {         // RAM Bank 00-03
         if (!RAM_ENABLED || !RAM_SIZE(cartridge->header)) {
             return 0xFF;
@@ -110,15 +110,13 @@ BYTE GB_mbc1_read(GB_cartridge_t *cartridge, WORD addr) {
 
         phys_addr &= 0x1fff; // Use gameboy address bits 0-12
 
-        // TODO: pass ram tests
-
         if (BANKING_MODE && RAM_SIZE(cartridge->header) > 8*1024) {
             phys_addr |= (RAM_BANK_NUMBER << 8);
         }
 
-        CHECK_BOUNDERIES(0, cartridge->data_size, "READ RAM BANK", 0xFF);
+        CHECK_BOUNDERIES(0, cartridge->ram_size, "READ RAM BANK", 0xFF);
 
-        return cartridge->data[phys_addr];
+        return cartridge->ram[phys_addr];
     }
 
     return 0xFF;
@@ -150,8 +148,8 @@ void GB_mbc1_write(GB_cartridge_t *cartridge, WORD addr, BYTE data) {
             phys_addr |= (RAM_BANK_NUMBER << 8);
         }
 
-        CHECK_BOUNDERIES(0, cartridge->data_size, "MBC1 WRITE RAM BANK", );
+        CHECK_BOUNDERIES(0, cartridge->ram_size, "MBC1 WRITE RAM BANK", );
 
-        cartridge->data[phys_addr] = data;
+        cartridge->ram[phys_addr] = data;
     }
 }
