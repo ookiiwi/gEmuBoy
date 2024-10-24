@@ -55,7 +55,7 @@ void GB_print_header(GB_header_t *header) {
 			"\tNEW LICENSEE CODE: %s\n" 	\
 			"\tCARTRIDGE TYPE: $%02X\n" 	\
 			"\tROM SIZE: $%02X (%lu)\n" 	\
-			"\tRAM SIZE: $%02X\n" 			\
+			"\tRAM SIZE: $%02X (%lu)\n"		\
 			"\tDESTINATION CODE: $%02X\n" 	\
 			"\tOLD LICENSEE CODE: $%02X\n" 	\
 			"\tROM VERSION: $%02X\n" 		\
@@ -65,7 +65,7 @@ void GB_print_header(GB_header_t *header) {
 			header->new_licensee_code, 
 			header->cartridge_type,
 			header->rom_size, ROM_SIZE(header),
-			header->ram_size,
+			header->ram_size, RAM_SIZE(header),
 			header->dst_code,
 			header->old_licensee_code,
 			header->rom_version,
@@ -81,7 +81,10 @@ GB_cartridge_t* GB_cartridge_create(const char *path) {
 	cartridge = (GB_cartridge_t*)( malloc( sizeof (GB_cartridge_t) ) );
 	if (!cartridge) { return NULL; }
 
-	cartridge->data 	= NULL;
+	cartridge->rom 		= NULL;
+	cartridge->ram 		= NULL;
+	cartridge->rom_size = 0;
+	cartridge->ram_size = 0;
 	cartridge->header 	= NULL;
 	cartridge->mbc 		= NULL;
 	
@@ -95,14 +98,20 @@ GB_cartridge_t* GB_cartridge_create(const char *path) {
     fsize = ftell(fp);
     fseek(fp, 0, SEEK_SET);
 
-	cartridge->data = (BYTE*)( malloc( sizeof (BYTE) * fsize + 1 ) );
-	if (!cartridge->data) {
+	cartridge->rom_size = fsize;
+	cartridge->rom = (BYTE*)( malloc( sizeof (BYTE) * fsize + 1 ) );
+	if (!cartridge->rom) {
     	fclose(fp);
 		free(cartridge);
 		return NULL;
 	}
 
-    int rv = fread((void*)(cartridge->data), sizeof(BYTE), fsize, fp);
+    int rv = fread((void*)(cartridge->rom), sizeof(BYTE), fsize, fp);
+	if (rv != fsize) {
+		fclose(fp);
+		free(cartridge);
+		return NULL;
+	}
 
 	cartridge->header = GB_header_create(fp, fsize);
     fclose(fp);
@@ -110,6 +119,16 @@ GB_cartridge_t* GB_cartridge_create(const char *path) {
 	if (!cartridge->header) {
 		GB_cartridge_destroy(cartridge);
 		return NULL;
+	}
+
+	cartridge->ram_size = RAM_SIZE(cartridge->header);
+
+	if (cartridge->ram_size) {
+		cartridge->ram = (BYTE*)( malloc( sizeof (BYTE) * cartridge->ram_size + 1 ) );
+		if (!cartridge->ram) {
+			GB_cartridge_destroy(cartridge);
+			return NULL;
+		}
 	}
 
 	cartridge->mbc = GB_MBC_create();
@@ -121,20 +140,21 @@ GB_cartridge_t* GB_cartridge_create(const char *path) {
 	switch(cartridge->header->cartridge_type) {
 		case 0: SET_MBC_CALLBACKS(0); break;
 		case 1: SET_MBC_CALLBACKS(1); break;
+		case 2: SET_MBC_CALLBACKS(1); break;
+		case 3: SET_MBC_CALLBACKS(1); break;
 		default: 
 			fprintf(stderr, "UNSUPPORTED CARTRIDGE %d\n", cartridge->header->cartridge_type);
 			GB_cartridge_destroy(cartridge);
 			return NULL;
 	}
 
-	cartridge->data_size = fsize;
-
     return cartridge;
 }
 
 void GB_cartridge_destroy(GB_cartridge_t *cartridge) {
 	if (!cartridge) return;
-	if (cartridge->data) free(cartridge->data);
+	if (cartridge->ram) free(cartridge->ram);
+	if (cartridge->rom) free(cartridge->rom);
 	GB_MBC_destroy(cartridge->mbc);
 	GB_header_destroy(cartridge->header);
 

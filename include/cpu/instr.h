@@ -122,7 +122,7 @@ static long REGISTER_PAIR2_OFFSET_TABLE[4] = {
 #define GET_RZ()            GET_REGISTER(OP_Z)
 
 static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
-#define CC(index) ( !( rF & CC_TABLE[index] ) ^ (index & 1) ) /* Condition Check */
+#define CC(index) ( !( rF & CC_TABLE[(index&3)] ) ^ ((index&3) & 1) ) /* Condition Check */
 
 
 /*------------------------------------------------------8-bit load instructions-------------------------------------------------------*/
