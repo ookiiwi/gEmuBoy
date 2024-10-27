@@ -1,5 +1,5 @@
-include(cmake/CompilerWarnings.cmake)
-include(cmake/Sanitizers.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/CompilerWarnings.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/Sanitizers.cmake)
 
 add_library(sanitizers INTERFACE)
 enable_sanitizers(sanitizers)
