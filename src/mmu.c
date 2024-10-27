@@ -109,8 +109,10 @@ BYTE GB_mem_read(GB_gameboy_t *gb, WORD addr) {
 }
 
 void GB_mem_write(GB_gameboy_t *gb, WORD addr, BYTE data) {
-    if (addr == GB_SC_ADDR && data == 0x81) {
-        printf("%c", (char)gb->io_regs[1]);
+    // temporary solution until serial transfer is implemented
+    if (addr == GB_SC_ADDR && (data & 0x80) == 0x80) {
+        printf("%d", gb->io_regs[1]);
+        fflush(stdout);
     }
 
     if (addr < VRAM_START_ADDR) {           // ROM bank
