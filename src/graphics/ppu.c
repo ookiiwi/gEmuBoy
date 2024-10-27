@@ -295,7 +295,7 @@ void GB_ppu_oam_write(GB_ppu_t *ppu, WORD addr, BYTE data) {
     ppu->oam[addr] = data;
 }
 
-GB_ppu_t* GB_ppu_create() {
+GB_ppu_t* GB_ppu_create(int headless) {
     GB_ppu_t *ppu = (GB_ppu_t*)( malloc( sizeof(GB_ppu_t) ) );
 
     ppu->vram = (BYTE*)( malloc( sizeof (BYTE) * 0x2000 ) );
@@ -313,7 +313,7 @@ GB_ppu_t* GB_ppu_create() {
     ppu->oam_buffer                 = oambuffer_create();
     ppu->bg_fetcher                 = pixelfetcher_create();
     ppu->obj_fetcher                = pixelfetcher_create();
-    ppu->lcd                        = GB_lcd_create();
+    ppu->lcd                        = headless ? NULL : GB_lcd_create();
     ppu->lx                         = 0;
     ppu->pending_cycles             = 0;
     ppu->scanline_dot_counter       = 0;

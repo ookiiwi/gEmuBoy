@@ -1,3 +1,6 @@
 [submodule "logs/gameboy-doctor"]
 	path = logs/gameboy-doctor
 	url = https://github.com/robert/gameboy-doctor.git
+[submodule "deps/argparse"]
+	path = deps/argparse
+	url = https://github.com/cofyc/argparse.git

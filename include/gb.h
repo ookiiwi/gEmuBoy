@@ -20,7 +20,7 @@ struct GB_gameboy_s {
     BYTE    ie;         // FFFF
 };
 
-GB_gameboy_t*   GB_gameboy_create(const char *rom_path);
+GB_gameboy_t*   GB_gameboy_create(const char *rom_path, int headless);
 void            GB_gameboy_destroy(GB_gameboy_t *gb);
 
 #endif

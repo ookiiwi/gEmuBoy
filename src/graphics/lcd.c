@@ -1,5 +1,4 @@
 #include "graphics/lcd.h"
-#include "type.h"
 #include "win_utils.h"
 
 #include <SDL.h>
@@ -46,12 +45,16 @@ void GB_lcd_destroy(GB_LCD_t *lcd) {
 static const int gb_colors[] = { 0xFF, 0xAA, 0x55, 0x00 };
 
 void GB_lcd_set_pixel(GB_LCD_t *lcd, int x, int y, int color_id) {
+    if (lcd == NULL) return;
+
     int color = gb_colors[color_id];
     int index = y * VIEWPORT_WIDTH + x;
     lcd->context->pixels[index] = ( (color << 24)|(color << 16)|(color << 8)|0x000000FF );
 }
 
 void GB_lcd_clear(GB_LCD_t *lcd) {
+    if (lcd == NULL) return;
+
     SDL_SetRenderDrawColor(lcd->context->renderer, 139, 172, 15, 255);
     SDL_RenderClear(lcd->context->renderer);
 }
@@ -59,6 +62,8 @@ void GB_lcd_clear(GB_LCD_t *lcd) {
 void update_texture(GB_LCD_t *lcd) {
     Uint32 *pixels;
     int     pitch;
+
+    if (lcd == NULL) return;
 
     SDL_LockTexture(lcd->context->texture, NULL, (void**)&pixels, &pitch);
     
@@ -68,6 +73,8 @@ void update_texture(GB_LCD_t *lcd) {
 }
 
 void GB_lcd_render(GB_LCD_t *lcd) {
+    if (lcd == NULL) return;
+
     update_texture(lcd);
     SDL_RenderCopy(lcd->context->renderer, lcd->context->texture, NULL, NULL);
     SDL_RenderPresent(lcd->context->renderer);

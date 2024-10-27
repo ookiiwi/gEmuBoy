@@ -24,7 +24,7 @@ typedef struct {
     GB_LCD_t        *lcd;
 } GB_ppu_t;
 
-GB_ppu_t*   GB_ppu_create();
+GB_ppu_t*   GB_ppu_create(int headless);
 void        GB_ppu_destroy(GB_ppu_t *ppu);
 
 void        GB_ppu_tick(GB_gameboy_t *gb, int cycles);

@@ -14,7 +14,7 @@
 
 void gameboy_init(GB_gameboy_t *gb);
 
-GB_gameboy_t*   GB_gameboy_create(const char *rom_path) {
+GB_gameboy_t*   GB_gameboy_create(const char *rom_path, int headless) {
     GB_gameboy_t *gb = (GB_gameboy_t*)( malloc( sizeof (GB_gameboy_t) ) );
     CHECK_ALLOC(gb);
 
@@ -34,7 +34,7 @@ GB_gameboy_t*   GB_gameboy_create(const char *rom_path) {
     gb->cpu = GB_cpu_create();
     CHECK_ALLOC(gb->cpu);
 
-    gb->ppu = GB_ppu_create();
+    gb->ppu = GB_ppu_create(headless);
     CHECK_ALLOC(gb->ppu);
 
     gb->mmu = GB_mmu_create();
