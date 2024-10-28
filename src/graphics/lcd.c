@@ -29,6 +29,11 @@ GB_LCD_t* GB_lcd_create() {
                                      VIEWPORT_WIDTH, 
                                      VIEWPORT_HEIGHT );
 
+    if (lcd->context == NULL) {
+        free(lcd);
+        return NULL;
+    }
+
     return lcd;
 }
 
@@ -47,7 +52,10 @@ static const int gb_colors[] = { 0xFF, 0xAA, 0x55, 0x00 };
 void GB_lcd_set_pixel(GB_LCD_t *lcd, int x, int y, int color_id) {
     if (lcd == NULL) return;
 
-    int color = gb_colors[color_id];
+    if (y > VIEWPORT_HEIGHT) {printf("Y OVER: %d\n", y); return; }
+    if (x > VIEWPORT_WIDTH) {printf("X OVER: %d\n", x); return; }
+
+    Uint32 color = gb_colors[color_id];
     int index = y * VIEWPORT_WIDTH + x;
     lcd->context->pixels[index] = ( (color << 24)|(color << 16)|(color << 8)|0x000000FF );
 }

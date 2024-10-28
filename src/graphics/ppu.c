@@ -319,6 +319,14 @@ GB_ppu_t* GB_ppu_create(int headless) {
     ppu->scanline_dot_counter       = 0;
     ppu->m_ppu_mode_switched        = PPU_MODE_SWITCHED_DEFAULT;
 
+    if ( (!headless && ppu->lcd == NULL) ||
+          !ppu->oam_buffer  ||
+          !ppu->bg_fetcher  || 
+          !ppu->obj_fetcher) {
+        GB_ppu_destroy(ppu);
+        return NULL;
+    }
+
     return ppu;
 }
 
@@ -329,6 +337,8 @@ void GB_ppu_destroy(GB_ppu_t *ppu) {
     pixelfetcher_destroy(ppu->bg_fetcher);
     pixelfetcher_destroy(ppu->obj_fetcher);
     GB_lcd_destroy(ppu->lcd);
+    if (ppu->oam) free(ppu->oam);
+    if (ppu->vram) free(ppu->vram);
     free(ppu);
 }
 
@@ -658,6 +668,7 @@ void ppu_vblank(GB_gameboy_t *gb) {
 }
 
 void GB_ppu_tick(GB_gameboy_t *gb, int cycles) {
+    // TODO: Move lcd enable check in draw mode. Enabling or disabling LCD should only affect drawing, not ppu modes
     if (!LCDC_LCD_EN || gb == NULL || gb->ppu == NULL) return;
     int dot_cnt, mode;
 

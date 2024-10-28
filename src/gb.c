@@ -10,7 +10,7 @@
 #define HRAM_SIZE       (0x007F)
 
 #define CHECK_ALLOC(var) if (!var) { GB_gameboy_destroy(gb); return NULL;}
-#define ALLOC_BYTE_ARRAY(elt_cnt) ( (BYTE*)( malloc( sizeof (BYTE) * elt_cnt ) ) )
+#define ALLOC_BYTE_ARRAY(elt_cnt) ( (BYTE*)( malloc( sizeof (BYTE) * elt_cnt + 1 ) ) )
 
 void gameboy_init(GB_gameboy_t *gb);
 
@@ -54,6 +54,10 @@ GB_gameboy_t*   GB_gameboy_create(const char *rom_path, int headless) {
 
     gameboy_init(gb);
 
+    // Temp fix
+    gb->io_regs[0x44] = 0x91;
+    gb->io_regs[0x40] = 0x91;
+
     return gb;
 }
 
@@ -68,6 +72,8 @@ void GB_gameboy_destroy(GB_gameboy_t *gb) {
     GB_ppu_destroy(gb->ppu);
     GB_cpu_destroy(gb->cpu);
     GB_cartridge_destroy(gb->cartridge);
+
+    free(gb);
 }
 
 void gameboy_init(GB_gameboy_t *gb) {
