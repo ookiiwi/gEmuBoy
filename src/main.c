@@ -30,7 +30,8 @@ int main(int argc, const char **argv) {
 
     struct argparse_option options[] = {
         OPT_HELP(),
-        OPT_BOOLEAN('l', "headless", &headless, "Run without GUI (mainly for test automation)", NULL, 0, 0)
+        OPT_BOOLEAN('l', "headless", &headless, "Run without GUI (mainly for test automation)", NULL, 0, 0),
+        OPT_END()
     };
 
     struct argparse argparse;
@@ -50,7 +51,7 @@ int main(int argc, const char **argv) {
 
     while(isrunning) {
         SDL_Event event;
-        while(SDL_PollEvent(&event)) {
+        while(!headless && SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) {
                 isrunning = 0;
             }
