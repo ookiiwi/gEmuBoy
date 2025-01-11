@@ -298,14 +298,19 @@ void GB_ppu_oam_write(GB_ppu_t *ppu, WORD addr, BYTE data) {
 GB_ppu_t* GB_ppu_create(int headless) {
     GB_ppu_t *ppu = (GB_ppu_t*)( malloc( sizeof(GB_ppu_t) ) );
 
-    ppu->vram = (BYTE*)( malloc( sizeof (BYTE) * 0x2000 ) );
+    if (!ppu) {
+        return NULL;
+    }
+
+    ppu->vram = (BYTE*)( calloc( 0x2000+1, sizeof (BYTE) ) );
     if (!ppu->vram) {
         free(ppu);
         return NULL;
     }
 
-    ppu->oam = (BYTE*)( malloc( sizeof (BYTE) * 160 ) );
+    ppu->oam = (BYTE*)( calloc( 161, sizeof (BYTE) ) );
     if (!ppu->oam) {
+        free(ppu->vram);
         free(ppu);
         return NULL;
     }
