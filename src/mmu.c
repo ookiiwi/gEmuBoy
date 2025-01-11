@@ -158,7 +158,7 @@ void GB_mem_write(GB_gameboy_t *gb, WORD addr, BYTE data) {
         }
 
         ADJUST_ADDR(IO_REGS_START_ADDR, HRAM_START_ADDR);
-        gb->io_regs[addr] = data;
+        gb->io_regs[addr] = GB_timer_write_check(gb, 0xFF00 | addr, data);
     } 
     
     else if (addr < IE_START_ADDR) {        // HRAM
@@ -181,6 +181,7 @@ GB_mmu_t* GB_mmu_create() {
 	mmu->dma_state 	= DMA_STOP;
 	mmu->dma_offset = 0;
 	mmu->dma_restart_cntdown = 0;
+    mmu->is_dma_active = 0;
 
 	return mmu;
 }
