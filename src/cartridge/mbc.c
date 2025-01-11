@@ -15,7 +15,7 @@
 
 #define CHECK_BOUNDERIES(a, b, msg, rv) do {                                                                    \
     if (phys_addr < a || phys_addr >= b) {                                                                      \
-        fprintf(stderr, "OUT OF RANGE %s BANK%d ($%04X => $%llX)\n", msg, ROM_BANK_NUMBER, addr, phys_addr);    \
+        fprintf(stderr, "OUT OF RANGE %s BANK%d ($%04X => $%lX)\n", msg, ROM_BANK_NUMBER, addr, phys_addr);    \
         return rv;                                                                                              \
     }                                                                                                           \
 } while(0)
