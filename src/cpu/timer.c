@@ -1,9 +1,9 @@
 #include "cpu/timer.h"
 #include "cpu/interrupt.h"
-#include "type.h"
 #include "gb.h"
 
 #include <stdlib.h>
+#include <stdio.h>
 
 #define SYSCLK                  ( gb->cpu->timer->sysclk )
 #define LAST_TIMA_INC_VAL       ( gb->cpu->timer->last_tima_inc_val   )
@@ -27,6 +27,12 @@ struct GB_timer_s {
 
 GB_timer_t* GB_timer_create() {
     GB_timer_t *timer = (GB_timer_t*)( malloc( sizeof (GB_timer_t) ) );
+    
+    if (timer != NULL) {
+        timer->sysclk = 0;
+        timer->last_tima_inc_val = 0; // TODO: init with proper values
+        timer->tima_reload_counter = 0;
+    }
 
     return timer;
 }
@@ -58,4 +64,19 @@ void GB_timer_update(GB_gameboy_t *gb) {
 
         LAST_TIMA_INC_VAL = tima_inc_val;
     }
+
+    DIV = SYSCLK>>8;
 }
+
+BYTE GB_timer_write_check(GB_gameboy_t *gb, WORD addr, BYTE data) {
+    /* Checks if TIMA is written during the M-cycle delay */
+    if (addr == 0xFF05) {
+        TIMA_RELOAD_COUNTER = 0;
+    } else if (addr == 0xFF04) { /* DIV */
+        data = 0;
+        SYSCLK = 0;
+    }
+
+    return data;
+}
+
