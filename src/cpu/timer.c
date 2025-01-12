@@ -71,7 +71,7 @@ void GB_timer_update(GB_gameboy_t *gb) {
 BYTE GB_timer_write_check(GB_gameboy_t *gb, WORD addr, BYTE data) {
     /* Checks if TIMA is written during the M-cycle delay */
     if (addr == 0xFF05) {
-        TIMA_RELOAD_COUNTER = 0;
+        TIMA_RELOAD_COUNTER = -1;
     } else if (addr == 0xFF04) { /* DIV */
         data = 0;
         SYSCLK = 0;

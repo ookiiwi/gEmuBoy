@@ -54,7 +54,6 @@ string(CONCAT EXLUDED_TEST_ROMS
         "interrupts/ie_push.gb|"
         "oam_dma/sources-GS.gb|"
         "/serial/|"
-        "timer/div_write.gb|"
         "timer/tima_reload.gb|"
         "timer/rapid_toggle.gb|"
         "timer/tima_write_reloading.gb|"
