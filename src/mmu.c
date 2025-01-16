@@ -102,7 +102,7 @@ BYTE GB_mem_read(GB_gameboy_t *gb, WORD addr) {
 
 		if (addr >= OAM_START_ADDR && addr <= OAM_END_ADDR) {
 			return 0xFF;
-		}
+        }
 	}
 
     return mem_read(gb, addr); 
@@ -157,6 +157,10 @@ void GB_mem_write(GB_gameboy_t *gb, WORD addr, BYTE data) {
             }
         }
 
+        if (addr == 0xFFFF || addr == 0xFF0F) {
+            data |= 0xE0;
+        }
+
         ADJUST_ADDR(IO_REGS_START_ADDR, HRAM_START_ADDR);
         gb->io_regs[addr] = GB_timer_write_check(gb, 0xFF00 | addr, data);
     } 
@@ -195,7 +199,6 @@ void GB_dma_run(GB_gameboy_t *gb) {
 		gb->mmu->dma_state = DMA_INIT;
 	}
 
-	// TODO: Pass oam_dma_restart.gb
 	switch (gb->mmu->dma_state) { 									
     	case DMA_START_M1: 											
 			gb->mmu->dma_state = DMA_START_M2;
