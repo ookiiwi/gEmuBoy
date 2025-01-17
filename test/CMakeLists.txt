@@ -28,9 +28,7 @@ string(CONCAT EXLUDED_TEST_ROMS
         "call_cc_timing2.gb|"
         "halt_ime0_nointr_timing.gb|"
         "if_ie_registers.gb|"
-        "intr_timing.gb|"
         "push_timing.gb|"
-        "rapid_di_ei.gb|"
         "ret_cc_timing.gb|"
         "rst_timing.gb|"
         "boot_div-S.gb|"
@@ -51,9 +49,6 @@ string(CONCAT EXLUDED_TEST_ROMS
         "interrupts/ie_push.gb|"
         "oam_dma/sources-GS.gb|"
         "/serial/|"
-        "timer/tima_reload.gb|"
-        "timer/tima_write_reloading.gb|"
-        "timer/tma_write_reloading.gb|"
         "mbc1/multicart_rom_8Mb.gb"
 )
 
