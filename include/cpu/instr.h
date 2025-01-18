@@ -4,7 +4,6 @@
 #include "cpu/cpu.h"
 #include "cpudef.h"
 #include "mmu.h"
-//#include "log.h"
 #include "cpu/interrupt.h"
 #include "cpu/timer.h"
 #include "defs.h"
@@ -1072,6 +1071,13 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
     }                                       			\
 } while(0)
 
+/// Internal RET with no delay cycle
+#define _RET() do {                          			\
+    rZ = READ_MEMORY(SP++);                  			\
+    rW = READ_MEMORY(SP++);                  			\
+    PC = WZ;                                			\
+} while(0)
+
 /**
  * RET: Return from function
  * 
@@ -1079,9 +1085,7 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
  * M-Cycles: 4
 */
 #define RET() do {                          			\
-    rZ = READ_MEMORY(SP++);                  			\
-    rW = READ_MEMORY(SP++);                  			\
-    PC = WZ;                                			\
+    _RET();                                             \
     INC_CYCLE();                            			\
 } while(0)
 
@@ -1094,7 +1098,8 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
 */
 #define RET_CC() do {                       			\
     if (CC(OP_Y)) {                         			\
-        RET();                              			\
+        INC_CYCLE();                                    \
+        _RET();                              			\
     }                                       			\
     INC_CYCLE();                            			\
 } while(0)

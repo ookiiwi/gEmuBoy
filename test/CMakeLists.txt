@@ -33,10 +33,8 @@ string(CONCAT EXLUDED_MOONEYE_TEST_ROMS
         "/ppu/|"
         "call_timing2.gb|"
         "call_cc_timing2.gb|"
-        "halt_ime0_nointr_timing.gb|"
         "if_ie_registers.gb|" # Note: VBLANK interrupt seems faulty. PPU's timing is surely to be revised
         "push_timing.gb|"
-        "ret_cc_timing.gb|"
         "rst_timing.gb|"
         "boot_div-S.gb|"
         "boot_div-dmg0.gb|"
