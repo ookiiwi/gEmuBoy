@@ -15,8 +15,17 @@ target_compile_definitions(${PROJECT_NAME} PUBLIC GB_MAIN_PRGM_DIR="${CMAKE_SOUR
 target_compile_definitions(${PROJECT_NAME} PUBLIC TEST_BOY_DIR="${PROJECT_SOURCE_DIR}")
 target_link_libraries(${PROJECT_NAME} PRIVATE ProjectExtra OpenMP::OpenMP_C)
 
+function (add_gb_test test_roms prefix test_suite_id)
+    foreach (path ${test_roms})
+        string(REGEX MATCH "[^\/]+\/[^\/]+\.gb$" RELATIVE_PATH ${path})
+        string(REGEX REPLACE "\/" "_" TEST_NAME_GB ${RELATIVE_PATH})
+        string(REGEX REPLACE "\.gb" "" TEST_NAME ${TEST_NAME_GB})
+        add_test(NAME "${PROJECT_NAME}_${prefix}_${TEST_NAME}" COMMAND ${PROJECT_NAME} ${path} ${test_suite_id})
+        set_tests_properties("${PROJECT_NAME}_${prefix}_${TEST_NAME}" PROPERTIES TIMEOUT 20)
+    endforeach()
+endfunction()
 
-string(CONCAT EXLUDED_TEST_ROMS 
+string(CONCAT EXLUDED_MOONEYE_TEST_ROMS 
         "/utils/|"
         "/misc/|"
         "/madness/|"
@@ -52,16 +61,10 @@ string(CONCAT EXLUDED_TEST_ROMS
         "mbc1/multicart_rom_8Mb.gb"
 )
 
-file(GLOB_RECURSE TEST_ROMS ${PROJECT_SOURCE_DIR}/**/*.gb)
-list(FILTER TEST_ROMS EXCLUDE REGEX "${EXLUDED_TEST_ROMS}") 
+file(GLOB_RECURSE MOONEYE_TEST_ROMS ${PROJECT_SOURCE_DIR}/**/mooneye-gb-test-roms/*.gb)
+list(FILTER MOONEYE_TEST_ROMS EXCLUDE REGEX "${EXLUDED_MOONEYE_TEST_ROMS}") 
 
-
-foreach (path ${TEST_ROMS})
-    string(REGEX MATCH "[^\/]+\.gb$" TMP ${path})
-    string(REGEX REPLACE "\.gb" "" TEST_NAME ${TMP})
-    add_test(NAME "${PROJECT_NAME}_${TEST_NAME}" COMMAND ${PROJECT_NAME} ${path} 1)
-    set_tests_properties("${PROJECT_NAME}_${TEST_NAME}" PROPERTIES TIMEOUT 20)
-endforeach()
+add_gb_test("${MOONEYE_TEST_ROMS}" mooneye 1)
 
 #add_test(NAME "${PROJECT_NAME}_valgrind" 
 #            COMMAND valgrind
