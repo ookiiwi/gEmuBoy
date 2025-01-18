@@ -7,13 +7,11 @@ project(testboy LANGUAGES C)
 include(CTest)
 enable_testing()
 
-find_package(OpenMP COMPONENTS C REQUIRED)
-
 add_executable(${PROJECT_NAME} src/testboy.c src/custom_io.c)
 target_include_directories(${PROJECT_NAME} PRIVATE include/)
 target_compile_definitions(${PROJECT_NAME} PUBLIC GB_MAIN_PRGM_DIR="${CMAKE_SOURCE_DIR}/build/")
 target_compile_definitions(${PROJECT_NAME} PUBLIC TEST_BOY_DIR="${PROJECT_SOURCE_DIR}")
-target_link_libraries(${PROJECT_NAME} PRIVATE ProjectExtra OpenMP::OpenMP_C)
+target_link_libraries(${PROJECT_NAME} PRIVATE ProjectExtra)
 
 function (add_gb_test test_roms prefix test_suite_id)
     foreach (path ${test_roms})
@@ -36,7 +34,7 @@ string(CONCAT EXLUDED_MOONEYE_TEST_ROMS
         "call_timing2.gb|"
         "call_cc_timing2.gb|"
         "halt_ime0_nointr_timing.gb|"
-        "if_ie_registers.gb|"
+        "if_ie_registers.gb|" # Note: VBLANK interrupt seems faulty. PPU's timing is surely to be revised
         "push_timing.gb|"
         "ret_cc_timing.gb|"
         "rst_timing.gb|"
