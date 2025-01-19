@@ -5,18 +5,4 @@ typedef struct GB_gameboy_s GB_gameboy_t;
 typedef struct GB_mmu_s GB_mmu_t;
 typedef struct GB_MBC_s GB_MBC_t;
 
-#define INC_CYCLE() do {                                              															    \
-    gb->cpu->t_cycle_counter+=4;                                        															\
-    GB_dma_run(gb);                                                                                                                 \
-    GB_ppu_tick(gb, 4);                                                                                                             \
-    GB_timer_update(gb);                                               															    \
-} while(0)
-
-#define FETCH_CYCLE() do {                                                                                                          \
-    PREV_IR = IR;                                                                                                                   \
-    INC_CYCLE();                                                                                                                    \
-    IR = GB_mem_read(gb, PC++);                                                                                                     \
-    GB_interrupt_handle(gb);                                                                                                        \
-} while(0)
-
 #endif

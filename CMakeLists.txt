@@ -26,8 +26,7 @@ add_executable(${PROJECT_NAME}  src/main.c
                                 src/graphics/lcd.c
                                 src/win_utils.c
                                 src/gb.c
-                                src/mmu.c
-                                src/log.c )
+                                src/mmu.c )
 target_include_directories(${PROJECT_NAME} PRIVATE include/)
 target_compile_definitions(${PROJECT_NAME} PUBLIC DEBUG_LOG_DIR="${CMAKE_SOURCE_DIR}/logs/")
 target_link_libraries(${PROJECT_NAME} PRIVATE ProjectExtra SDL2::SDL2 argparse_static)

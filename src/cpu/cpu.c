@@ -1,6 +1,7 @@
 #include "cpu/cpu.h"
 #include "cpu/timer.h"
 #include "cpu/decode.h"
+#include "gb_utils.h"
 
 #include <stdlib.h>
 #include <stdio.h>

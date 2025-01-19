@@ -4,10 +4,8 @@
 #include "cpu/cpu.h"
 #include "cpudef.h"
 #include "mmu.h"
-#include "cpu/interrupt.h"
-#include "cpu/timer.h"
 #include "defs.h"
-#include "gb.h"
+#include "gb_utils.h"
 
 #include <stddef.h>
 
@@ -374,9 +372,9 @@ static const BYTE CC_TABLE[4] = { ZF_TOGGLE, ZF_TOGGLE, CF_TOGGLE, CF_TOGGLE };
 */
 #define PUSH_RP() do {                      			\
     WORD rr = RP2;                          			\
+    INC_CYCLE();                                        \
     SP--; WRITE_MEMORY(SP, MSB(rr)); /* M2/M3 */		\
     SP--; WRITE_MEMORY(SP, LSB(rr)); /* M4 */   		\
-    INC_CYCLE();                                        \
 } while(0)
 
 /**

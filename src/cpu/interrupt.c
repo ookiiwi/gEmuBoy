@@ -1,10 +1,9 @@
 #include "cpu/interrupt.h"
 #include "type.h"
 #include "memmap.h"
-#include "gb.h"
+#include "gb_utils.h"
 #include "cpudef.h"
 #include "mmu.h"
-#include <stdio.h>
 
 #define IE ( gb->ie )
 #define IF ( gb->io_regs[GB_IF_ADDR & 0xFF] )
