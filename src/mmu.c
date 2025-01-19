@@ -108,7 +108,7 @@ BYTE GB_mem_read(GB_gameboy_t *gb, WORD addr) {
     return mem_read(gb, addr); 
 }
 
-void GB_mem_write(GB_gameboy_t *gb, WORD addr, BYTE data) {
+void mem_write(GB_gameboy_t *gb, WORD addr, BYTE data) {
     // temporary solution until serial transfer is implemented
     if (addr == GB_SC_ADDR && (data & 0x80) == 0x80) {
         printf("%d", gb->io_regs[1]);
@@ -175,6 +175,17 @@ void GB_mem_write(GB_gameboy_t *gb, WORD addr, BYTE data) {
     }
 }
 
+void GB_mem_write(GB_gameboy_t *gb, WORD addr, BYTE data) {
+    if (gb->mmu->is_dma_active) {
+		if (addr >= OAM_START_ADDR && addr <= OAM_END_ADDR) {
+			return;
+        }
+	}
+
+    mem_write(gb, addr, data);
+}
+
+
 GB_mmu_t* GB_mmu_create() {
 	GB_mmu_t *mmu = (GB_mmu_t*)( malloc( sizeof (GB_mmu_t) ) );
 
@@ -195,7 +206,7 @@ void GB_mmu_destroy(GB_mmu_t *mmu) {
 }
 
 void GB_dma_run(GB_gameboy_t *gb) {
-	if (gb->mmu->dma_restart_cntdown-- == 1) {
+	if (gb->mmu->dma_restart_cntdown && gb->mmu->dma_restart_cntdown-- == 1) {
 		gb->mmu->dma_state = DMA_INIT;
 	}
 
@@ -207,16 +218,15 @@ void GB_dma_run(GB_gameboy_t *gb) {
     		gb->mmu->dma_state = DMA_INIT; 						
     		break; 													
 		case DMA_INIT:
-			gb->mmu->dma_source = ( GB_mem_read(gb, DMA_SOURCE_ADDR) << 8 );
+			gb->mmu->dma_source     = ( mem_read(gb, DMA_SOURCE_ADDR) << 8 );
     		gb->mmu->dma_state 		= DMA_RUNNING; 						
 			gb->mmu->is_dma_active 	= 1;
 			gb->mmu->dma_offset 	= 0;
 			// NOTE: break is omitted on purpose
     	case DMA_RUNNING: {
 			gb->mmu->addr_bus = OAM_START_ADDR | gb->mmu->dma_offset;
-			//MEMREAD(gb, (gb->mmu->dma_source | gb->mmu->dma_offset), gb->mmu->data_bus);
-            gb->mmu->data_bus = GB_mem_read(gb, (gb->mmu->dma_source | gb->mmu->dma_offset));
-    		GB_mem_write(gb, gb->mmu->addr_bus, gb->mmu->data_bus);
+            gb->mmu->data_bus = mem_read(gb, (gb->mmu->dma_source | gb->mmu->dma_offset));
+    		mem_write(gb, gb->mmu->addr_bus, gb->mmu->data_bus);
     		if (++gb->mmu->dma_offset > ( OAM_END_ADDR & 0xFF ) ) { 	
     			gb->mmu->dma_state 		= DMA_STOP; 						
 				gb->mmu->dma_offset 	= 0;
