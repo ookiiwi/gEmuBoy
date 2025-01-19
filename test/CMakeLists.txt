@@ -31,10 +31,7 @@ string(CONCAT EXLUDED_MOONEYE_TEST_ROMS
         "/mbc2/|"
         "/mbc5/|"
         "/ppu/|"
-        "call_timing2.gb|"
-        "call_cc_timing2.gb|"
         "if_ie_registers.gb|" # Note: VBLANK interrupt seems faulty. PPU's timing is surely to be revised
-        "push_timing.gb|"
         "rst_timing.gb|"
         "boot_div-S.gb|"
         "boot_div-dmg0.gb|"
