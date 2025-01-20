@@ -20,7 +20,6 @@ GB_cpu_t* GB_cpu_create() {
     cpu->IME                    = 0;
     cpu->ei_delay               = 0;
     cpu->is_halted              = 0;
-    cpu->halt_bug               = 0;
     cpu->is_stopped             = 0;
     cpu->t_cycle_counter        = 0;
     cpu->timer                  = GB_timer_create();
@@ -41,7 +40,7 @@ void GB_cpu_run(GB_gameboy_t *gb) {
         FETCH_CYCLE();
     } else {
         INC_CYCLE();
-        GB_interrupt_handle(gb);
+        GB_interrupt_handle(gb, IR, PREV_IR);
     }
 
     if (gb->cpu->ei_delay) {

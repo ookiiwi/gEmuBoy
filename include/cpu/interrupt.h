@@ -2,6 +2,7 @@
 #define GB_INTERRUPT_H_
 
 #include "defs.h"
+#include "type.h"
 
 #define IF_VBLANK   (0x01)
 #define IF_LCD      (0x02)
@@ -16,6 +17,6 @@
 #define DISABLE_INTERRUPT(b)    ( gb->ie &= ~b          )
 
 // This call is supposed to happen after next instruction fetching
-void GB_interrupt_handle(GB_gameboy_t *gb);
+void GB_interrupt_handle(GB_gameboy_t *gb, BYTE ir, BYTE prev_ir);
 
 #endif

@@ -14,10 +14,11 @@
 } while(0)
 
 #define FETCH_CYCLE() do {                                                                                                          \
+    BYTE ir = IR, prev_ir = PREV_IR;                                                                                                \
     PREV_IR = IR;                                                                                                                   \
     INC_CYCLE();                                                                                                                    \
     IR = GB_mem_read(gb, PC++);                                                                                                     \
-    GB_interrupt_handle(gb);                                                                                                        \
+    GB_interrupt_handle(gb, ir, prev_ir);                                                                                           \
 } while(0)
 
 #endif

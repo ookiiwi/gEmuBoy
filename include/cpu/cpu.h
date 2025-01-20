@@ -31,7 +31,6 @@ typedef struct {
     int                 ei_delay;
 
     int                 is_halted;
-    int                 halt_bug;
     int                 is_stopped;
     uint64_t            t_cycle_counter;
     GB_timer_t         *timer;
