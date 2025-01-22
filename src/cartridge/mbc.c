@@ -1,10 +1,12 @@
 #include "cartridge/mbc.h"
 #include "cartridge/cartridge.h"
 
+#include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 
 #define ROM_BANK_MASK       ( ( 2 << cartridge->header->rom_size ) - 1 )
+#define RAM_BANK_MASK       ( ( 2 << cartridge->header->ram_size ) - 1 )
 #define ROM_BANK1_NUMBER    ( ( cartridge->mbc->bank_number & 0x1F ) & ROM_BANK_MASK )
 #define ROM_BANK2_NUMBER    ( ( cartridge->mbc->bank_number & 0x60 ) & ROM_BANK_MASK )
 #define ROM_BANK_NUMBER     ( ( cartridge->mbc->bank_number )        & ROM_BANK_MASK )
@@ -15,7 +17,7 @@
 
 #define CHECK_BOUNDERIES(a, b, msg, rv) do {                                                                    \
     if (phys_addr < a || phys_addr >= b) {                                                                      \
-        fprintf(stderr, "OUT OF RANGE %s BANK%d ($%04X => $%lX)\n", msg, ROM_BANK_NUMBER, addr, phys_addr);    \
+        fprintf(stderr, "OUT OF RANGE %s BANK%d ($%04X => $%llX)\n", msg, ROM_BANK_NUMBER, addr, (uint64_t)phys_addr);    \
         return rv;                                                                                              \
     }                                                                                                           \
 } while(0)
@@ -24,9 +26,10 @@ GB_MBC_t* GB_MBC_create() {
     GB_MBC_t *mbc = (GB_MBC_t*)( malloc( sizeof (GB_MBC_t) ) );
 
     if (mbc) {
-        mbc->bank_number    = 1;
-        mbc->banking_mode   = 0;
-        mbc->ram_enabled    = 0;
+        mbc->bank_number        = 1;
+        mbc->ram_bank_number    = 0;
+        mbc->banking_mode       = 0;
+        mbc->ram_enabled        = 0;
     }
 
     return mbc;
@@ -151,5 +154,33 @@ void GB_mbc1_write(GB_cartridge_t *cartridge, WORD addr, BYTE data) {
         CHECK_BOUNDERIES(0, cartridge->ram_size, "MBC1 WRITE RAM BANK", );
 
         cartridge->ram[phys_addr] = data;
+    }
+}
+
+BYTE GB_mbc5_read(GB_cartridge_t *cartridge, WORD addr) {
+    if (addr < 0x4000) {
+        return cartridge->rom[addr];
+    } else if (addr < 0x8000) {
+        return cartridge->rom[0x4000 * ROM_BANK_NUMBER + (addr - 0x4000)];
+    } else if (addr > 0x9FFF && addr < 0xC000 && RAM_ENABLED) {
+        return cartridge->ram[0x2000 * cartridge->mbc->ram_bank_number + (addr - 0xA000)];
+    }
+
+    return 0xFF;
+}
+
+void GB_mbc5_write(GB_cartridge_t *cartridge, WORD addr, BYTE data) {
+    if (addr < 0x2000) {
+        cartridge->mbc->ram_enabled = ( (data&0xF) == 0xA );
+    } else if (addr < 0x3000) {
+        cartridge->mbc->bank_number = (ROM_BANK_NUMBER & 0x100) | data;
+    } else if (addr < 0x4000) {
+        cartridge->mbc->bank_number = ((data & 1) << 8) | (ROM_BANK_NUMBER & 0x0FF);
+    } else if (addr < 0x6000) {
+        cartridge->mbc->ram_bank_number = ((data & 0x0F) & RAM_BANK_MASK);
+    }
+
+    else if (addr >= 0xA000 && addr < 0xC000 && RAM_ENABLED) {
+        cartridge->ram[0x2000 * cartridge->mbc->ram_bank_number + (addr - 0xA000)] = data;
     }
 }

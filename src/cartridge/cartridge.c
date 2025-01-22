@@ -142,6 +142,12 @@ GB_cartridge_t* GB_cartridge_create(const char *path) {
 		case 1: SET_MBC_CALLBACKS(1); break;
 		case 2: SET_MBC_CALLBACKS(1); break;
 		case 3: SET_MBC_CALLBACKS(1); break;
+        case 0x19: SET_MBC_CALLBACKS(5); break;
+        case 0x1A: SET_MBC_CALLBACKS(5); break;
+        case 0x1B: SET_MBC_CALLBACKS(5); break;
+        case 0x1C: SET_MBC_CALLBACKS(5); break;
+        case 0x1D: SET_MBC_CALLBACKS(5); break;
+        case 0x1E: SET_MBC_CALLBACKS(5); break;
 		default: 
 			fprintf(stderr, "UNSUPPORTED CARTRIDGE %d\n", cartridge->header->cartridge_type);
 			GB_cartridge_destroy(cartridge);

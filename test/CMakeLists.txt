@@ -45,7 +45,6 @@ string(CONCAT EXLUDED_MOONEYE_TEST_ROMS
         "/madness/|"
         "/manual-only/|"
         "/mbc2/|"
-        "/mbc5/|"
         "/ppu/|"
         "if_ie_registers.gb|" # Note: VBLANK interrupt seems faulty. PPU's timing is surely to be revised
         "rst_timing.gb|"

@@ -6,7 +6,8 @@
 #include "cartridge/cartridge.h"
 
 struct GB_MBC_s {
-    BYTE bank_number;
+    WORD bank_number;
+    WORD ram_bank_number;
     int ram_enabled;
     int banking_mode;
 };
@@ -20,5 +21,6 @@ void       GB_MBC_destroy(GB_MBC_t *mbc);
 
 MBC_DECL(0);
 MBC_DECL(1);
+MBC_DECL(5);
 
 #endif
