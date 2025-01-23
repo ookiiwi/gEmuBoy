@@ -7,7 +7,8 @@
 
 #define HEADER_SIZE_IN_BYTES (0x0150 - 0x0134)
 
-static const ssize_t RAM_SIZES[] = { 0, 0, 8, 32, 128, 64 };
+#define ROM_SIZE(header) ( (32 * 1024UL) * ( 1 << header->rom_type ) )
+#define RAM_SIZE(mbc) ( 8192UL * mbc->ram_bank_count )
 
 #define SET_MBC_CALLBACKS(n) 							\
 	cartridge->read_callback 	= GB_mbc##n##_read;		\
@@ -54,8 +55,8 @@ void GB_print_header(GB_header_t *header) {
 			"\tTITLE: %s\n" 				\
 			"\tNEW LICENSEE CODE: %s\n" 	\
 			"\tCARTRIDGE TYPE: $%02X\n" 	\
-			"\tROM SIZE: $%02X (%lu)\n" 	\
-			"\tRAM SIZE: $%02X (%lu)\n"		\
+			"\tROM SIZE: $%02X\n" 	\
+			"\tRAM SIZE: $%02X\n"		\
 			"\tDESTINATION CODE: $%02X\n" 	\
 			"\tOLD LICENSEE CODE: $%02X\n" 	\
 			"\tROM VERSION: $%02X\n" 		\
@@ -64,8 +65,8 @@ void GB_print_header(GB_header_t *header) {
 			header->title,
 			header->new_licensee_code, 
 			header->cartridge_type,
-			header->rom_size, ROM_SIZE(header),
-			header->ram_size, RAM_SIZE(header),
+			header->rom_type,
+			header->ram_type,
 			header->dst_code,
 			header->old_licensee_code,
 			header->rom_version,
@@ -121,7 +122,13 @@ GB_cartridge_t* GB_cartridge_create(const char *path) {
 		return NULL;
 	}
 
-	cartridge->ram_size = RAM_SIZE(cartridge->header);
+	cartridge->mbc = GB_mbc_create(cartridge->header);
+	if (!cartridge->mbc) {
+		GB_cartridge_destroy(cartridge);
+		return NULL;
+	}
+
+	cartridge->ram_size = RAM_SIZE(cartridge->mbc);
 
 	if (cartridge->ram_size) {
 		cartridge->ram = (BYTE*)( malloc( sizeof (BYTE) * cartridge->ram_size + 1 ) );
@@ -131,19 +138,13 @@ GB_cartridge_t* GB_cartridge_create(const char *path) {
 		}
 	}
 
-	cartridge->mbc = GB_MBC_create();
-	if (!cartridge->mbc) {
-		GB_cartridge_destroy(cartridge);
-		return NULL;
-	}
-
 	switch(cartridge->header->cartridge_type) {
 		case 0: SET_MBC_CALLBACKS(0); break;
 		case 1: SET_MBC_CALLBACKS(1); break;
 		case 2: SET_MBC_CALLBACKS(1); break;
 		case 3: SET_MBC_CALLBACKS(1); break;
-		case 5:GB_mbc2_init(cartridge);SET_MBC_CALLBACKS(2); break;
-		case 6:GB_mbc2_init(cartridge);SET_MBC_CALLBACKS(2); break;
+		case 5: SET_MBC_CALLBACKS(2); break;
+		case 6: SET_MBC_CALLBACKS(2); break;
 		case 8: SET_MBC_CALLBACKS(1); break;
 		case 9: SET_MBC_CALLBACKS(1); break;
         case 0x19: SET_MBC_CALLBACKS(5); break;
@@ -165,7 +166,7 @@ void GB_cartridge_destroy(GB_cartridge_t *cartridge) {
 	if (!cartridge) return;
 	if (cartridge->ram) free(cartridge->ram);
 	if (cartridge->rom) free(cartridge->rom);
-	GB_MBC_destroy(cartridge->mbc);
+	GB_mbc_destroy(cartridge->mbc);
 	GB_header_destroy(cartridge->header);
 
 	free(cartridge);

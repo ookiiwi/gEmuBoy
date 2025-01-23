@@ -6,10 +6,6 @@
 
 #include <stddef.h> // size_t
 
-static const int RAM_SIZE_LOOKUP[] = { 0, 0, 8, 32, 128, 64 };
-#define ROM_SIZE(header) ( (32 * 1024UL) * ( 1 << header->rom_size ) )
-#define RAM_SIZE(header) ( 1024UL * RAM_SIZE_LOOKUP[header->ram_size] )
-
 typedef struct GB_cartridge_s GB_cartridge_t; 
 typedef BYTE (*cartridge_read_callback)(GB_cartridge_t *, WORD);
 typedef void (*cartridge_write_callback)(GB_cartridge_t*, WORD, BYTE);
@@ -24,8 +20,8 @@ typedef struct {
 	const char 		new_licensee_code[2]; 	// 0144-0145
 	BYTE 			sgb_flag; 				// 0146
 	BYTE 			cartridge_type; 		// 0147
-	BYTE 			rom_size; 				// 0148
-	BYTE 			ram_size; 				// 0149 -- 0 if cartridge_type does not include ram in its name
+	BYTE 			rom_type; 		        // 0148
+	BYTE 			ram_type; 	            // 0149 -- 0 if cartridge_type does not include ram in its name
 	BYTE 			dst_code; 				// 014A
 	BYTE      		old_licensee_code; 		// 014B -- $33 indicates that new licensee code should be used
 	BYTE 			rom_version; 			// 014C
@@ -42,7 +38,7 @@ struct GB_cartridge_s {
 	cartridge_read_callback 	read_callback;
 	cartridge_write_callback 	write_callback;
 
-	GB_MBC_t					*mbc;
+	GB_mbc_t					*mbc;
 };
 
 void 			GB_print_header(GB_header_t *header);
