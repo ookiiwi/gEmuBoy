@@ -2,6 +2,7 @@
 #include "gb.h"
 #include "graphics/ppu.h"
 #include "memmap.h"
+#include "cartridge/mbc.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -52,7 +53,7 @@ struct GB_mmu_s {
 
 BYTE mem_read(GB_gameboy_t *gb, WORD addr) {
     if (addr < VRAM_START_ADDR) {           // ROM bank     -- 0000-7FFF
-        return gb->cartridge->read_callback(gb->cartridge, addr);
+        return GB_mbc_read(gb->cartridge->mbc, addr);
     } 
     
     else if (addr < EXT_RAM_START_ADDR) {   // VRAM         -- 8000-9FFF
@@ -60,7 +61,7 @@ BYTE mem_read(GB_gameboy_t *gb, WORD addr) {
     } 
     
     else if (addr < WRAM_START_ADDR) {      // RAM bank     -- A000-BFFF
-        return gb->cartridge->read_callback(gb->cartridge, addr);
+        return GB_mbc_read(gb->cartridge->mbc, addr);
     } 
     
     else if (addr < ECHO_RAM_START_ADDR) {  // WRAM         -- C000-DFFF
@@ -116,7 +117,7 @@ void mem_write(GB_gameboy_t *gb, WORD addr, BYTE data) {
     }
 
     if (addr < VRAM_START_ADDR) {           // ROM bank
-        gb->cartridge->write_callback(gb->cartridge, addr, data);
+        GB_mbc_write(gb->cartridge->mbc, addr, data);
     } 
     
     else if (addr < EXT_RAM_START_ADDR) {   // VRAM
@@ -124,7 +125,7 @@ void mem_write(GB_gameboy_t *gb, WORD addr, BYTE data) {
     } 
     
     else if (addr < WRAM_START_ADDR) {      // RAM bank
-        gb->cartridge->write_callback(gb->cartridge, addr, data);
+        GB_mbc_write(gb->cartridge->mbc, addr, data);
     }
     
     else if (addr < ECHO_RAM_START_ADDR) {  // WRAM

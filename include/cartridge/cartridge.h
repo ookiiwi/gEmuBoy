@@ -31,13 +31,6 @@ typedef struct {
 
 struct GB_cartridge_s {
 	GB_header_t 				*header;
-	BYTE 						*rom;
-	BYTE 						*ram;
-	size_t 						rom_size;
-	size_t						ram_size;
-	cartridge_read_callback 	read_callback;
-	cartridge_write_callback 	write_callback;
-
 	GB_mbc_t					*mbc;
 };
 

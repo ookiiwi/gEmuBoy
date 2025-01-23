@@ -8,11 +8,6 @@
 #define HEADER_SIZE_IN_BYTES (0x0150 - 0x0134)
 
 #define ROM_SIZE(header) ( (32 * 1024UL) * ( 1 << header->rom_type ) )
-#define RAM_SIZE(mbc) ( 8192UL * mbc->ram_bank_count )
-
-#define SET_MBC_CALLBACKS(n) 							\
-	cartridge->read_callback 	= GB_mbc##n##_read;		\
-	cartridge->write_callback 	= GB_mbc##n##_write;
 
 GB_header_t* GB_header_create(FILE *fp, long fsize) {
 	GB_header_t *header;
@@ -82,10 +77,6 @@ GB_cartridge_t* GB_cartridge_create(const char *path) {
 	cartridge = (GB_cartridge_t*)( malloc( sizeof (GB_cartridge_t) ) );
 	if (!cartridge) { return NULL; }
 
-	cartridge->rom 		= NULL;
-	cartridge->ram 		= NULL;
-	cartridge->rom_size = 0;
-	cartridge->ram_size = 0;
 	cartridge->header 	= NULL;
 	cartridge->mbc 		= NULL;
 	
@@ -99,74 +90,29 @@ GB_cartridge_t* GB_cartridge_create(const char *path) {
     fsize = ftell(fp);
     fseek(fp, 0, SEEK_SET);
 
-	cartridge->rom_size = fsize;
-	cartridge->rom = (BYTE*)( malloc( sizeof (BYTE) * fsize + 1 ) );
-	if (!cartridge->rom) {
-    	fclose(fp);
-		free(cartridge);
-		return NULL;
-	}
-
-    int rv = fread((void*)(cartridge->rom), sizeof(BYTE), fsize, fp);
-	if (rv != fsize) {
-		fclose(fp);
-		free(cartridge);
-		return NULL;
-	}
-
 	cartridge->header = GB_header_create(fp, fsize);
-    fclose(fp);
 
 	if (!cartridge->header) {
+        fclose(fp);
 		GB_cartridge_destroy(cartridge);
 		return NULL;
 	}
 
-	cartridge->mbc = GB_mbc_create(cartridge->header);
+	cartridge->mbc = GB_mbc_create(cartridge->header, fp, fsize);
 	if (!cartridge->mbc) {
+        fclose(fp);
 		GB_cartridge_destroy(cartridge);
 		return NULL;
 	}
-
-	cartridge->ram_size = RAM_SIZE(cartridge->mbc);
-
-	if (cartridge->ram_size) {
-		cartridge->ram = (BYTE*)( malloc( sizeof (BYTE) * cartridge->ram_size + 1 ) );
-		if (!cartridge->ram) {
-			GB_cartridge_destroy(cartridge);
-			return NULL;
-		}
-	}
-
-	switch(cartridge->header->cartridge_type) {
-		case 0: SET_MBC_CALLBACKS(0); break;
-		case 1: SET_MBC_CALLBACKS(1); break;
-		case 2: SET_MBC_CALLBACKS(1); break;
-		case 3: SET_MBC_CALLBACKS(1); break;
-		case 5: SET_MBC_CALLBACKS(2); break;
-		case 6: SET_MBC_CALLBACKS(2); break;
-		case 8: SET_MBC_CALLBACKS(1); break;
-		case 9: SET_MBC_CALLBACKS(1); break;
-        case 0x19: SET_MBC_CALLBACKS(5); break;
-        case 0x1A: SET_MBC_CALLBACKS(5); break;
-        case 0x1B: SET_MBC_CALLBACKS(5); break;
-        case 0x1C: SET_MBC_CALLBACKS(5); break;
-        case 0x1D: SET_MBC_CALLBACKS(5); break;
-        case 0x1E: SET_MBC_CALLBACKS(5); break;
-		default: 
-			fprintf(stderr, "UNSUPPORTED CARTRIDGE %d\n", cartridge->header->cartridge_type);
-			GB_cartridge_destroy(cartridge);
-			return NULL;
-	}
+    
+    fclose(fp);
 
     return cartridge;
 }
 
 void GB_cartridge_destroy(GB_cartridge_t *cartridge) {
 	if (!cartridge) return;
-	if (cartridge->ram) free(cartridge->ram);
-	if (cartridge->rom) free(cartridge->rom);
-	GB_mbc_destroy(cartridge->mbc);
+    GB_mbc_destroy(cartridge->mbc);
 	GB_header_destroy(cartridge->header);
 
 	free(cartridge);
