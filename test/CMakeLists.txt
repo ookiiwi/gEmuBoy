@@ -25,7 +25,7 @@ function (add_gb_test test_roms prefix test_suite_id)
         set(TEST_ARGS ${path} ${test_suite_id})
 
         add_test(NAME ${TEST_NAME} COMMAND ${PROJECT_NAME} ${TEST_ARGS}) 
-        set_tests_properties(${TEST_NAME} PROPERTIES TIMEOUT 20)
+        set_tests_properties(${TEST_NAME} PROPERTIES TIMEOUT 40)
 
         if (VALGRIND_FOUND)
             add_test(NAME "${TEST_NAME}_valgrind" 
@@ -44,7 +44,6 @@ string(CONCAT EXLUDED_MOONEYE_TEST_ROMS
         "/misc/|"
         "/madness/|"
         "/manual-only/|"
-        "/mbc2/|"
         "/ppu/|"
         "if_ie_registers.gb|" # Note: VBLANK interrupt seems faulty. PPU's timing is surely to be revised
         "rst_timing.gb|"

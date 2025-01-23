@@ -157,6 +157,32 @@ void GB_mbc1_write(GB_cartridge_t *cartridge, WORD addr, BYTE data) {
     }
 }
 
+BYTE GB_mbc2_read(GB_cartridge_t *cartridge, WORD addr) {
+    if (addr < 0x4000) {
+        return cartridge->rom[addr];
+    } else if (addr < 0x8000) {
+        return cartridge->rom[0x4000 * ROM_BANK_NUMBER + (addr - 0x4000)];
+    } else if (addr > 0x9FFF && addr < 0xC000 && RAM_ENABLED) {
+        return cartridge->ram[addr&0x1ff];
+    }
+
+    return 0xFF;
+}
+
+void GB_mbc2_write(GB_cartridge_t *cartridge, WORD addr, BYTE data) {
+    if (addr < 0x4000) {
+        if ( addr&0x100 ) { // bit 8 set = ROM bank select
+            cartridge->mbc->bank_number = (data&0xF) ? (data&0xF) : 1;
+        } else {
+            cartridge->mbc->ram_enabled = ( (data&0xF) == 0xA );
+        }
+    }
+
+    else if (addr >= 0xA000 && addr < 0xC000 && RAM_ENABLED) {
+        cartridge->ram[addr&0x1ff] = 0xF0 | (data&0xF);
+    }
+}
+
 BYTE GB_mbc5_read(GB_cartridge_t *cartridge, WORD addr) {
     if (addr < 0x4000) {
         return cartridge->rom[addr];

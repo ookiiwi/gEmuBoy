@@ -5,6 +5,8 @@
 #include "defs.h"
 #include "cartridge/cartridge.h"
 
+#include <stdlib.h>
+
 struct GB_MBC_s {
     WORD bank_number;
     WORD ram_bank_number;
@@ -21,6 +23,12 @@ void       GB_MBC_destroy(GB_MBC_t *mbc);
 
 MBC_DECL(0);
 MBC_DECL(1);
+MBC_DECL(2);
 MBC_DECL(5);
+
+
+static inline void GB_mbc2_init(GB_cartridge_t *cartridge) {
+    cartridge->ram = (BYTE*)malloc( 0x200 * sizeof (BYTE) );
+}
 
 #endif
