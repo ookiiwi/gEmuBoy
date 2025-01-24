@@ -8,6 +8,13 @@ include(CTest)
 enable_testing()
 
 find_program(VALGRIND_FOUND "valgrind")
+find_program(TIMEOUT_FOUND  "timeout")
+
+if (VALGRIND_FOUND AND TIMEOUT_FOUND)
+    message("Valgrind tests enabled")
+else()
+    message("Valgrind tests disabled")
+endif()
 
 add_executable(${PROJECT_NAME} src/testboy.c src/custom_io.c)
 target_include_directories(${PROJECT_NAME} PRIVATE include/)
@@ -27,14 +34,14 @@ function (add_gb_test test_roms prefix test_suite_id)
         add_test(NAME ${TEST_NAME} COMMAND ${PROJECT_NAME} ${TEST_ARGS}) 
         set_tests_properties(${TEST_NAME} PROPERTIES TIMEOUT 40)
 
-        if (VALGRIND_FOUND)
-            add_test(NAME "${TEST_NAME}_valgrind" 
-                        COMMAND valgrind
+        if (VALGRIND_FOUND AND TIMEOUT_FOUND)
+            set(VALGRIND_TEST_NAME "${CMAKE_PROJECT_NAME}_${prefix}_${ROM_NAME}_valgrind")
+            add_test(NAME ${VALGRIND_TEST_NAME} 
+                        COMMAND timeout 10 valgrind
                             --error-exitcode=1
                             --track-origins=yes
                             --leak-check=full
-                            --show-leak-kinds=all
-                            $<TARGET_FILE:${PROJECT_NAME}> ${TEST_ARGS})
+                            $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${path} "-l")
         endif()
     endforeach()
 endfunction()
