@@ -10,19 +10,19 @@
 #define ROM_BANK_NUMBER     ( mbc->rom_bank_number & ROM_BANK_MASK )
 #define RAM_BANK_NUMBER     ( mbc->ram_bank_number & RAM_BANK_MASK )
 
-#define RAM_ENABLED     ( mbc->ram_bank_count && mbc->ram_enabled )
-#define BANKING_MODE    ( mbc->banking_mode )
+#define RAM_ENABLED         ( mbc->ram_bank_count && mbc->ram_enabled )
+#define BANKING_MODE        ( mbc->banking_mode )
 
-#define _rom            ( mbc->rom )
-#define _ram            ( mbc->ram )
-#define _rom_size       ( mbc->rom_size )
-#define _ram_size       ( mbc->ram_size )
+#define _rom                ( mbc->rom )
+#define _ram                ( mbc->ram )
+#define _rom_size           ( mbc->rom_size )
+#define _ram_size           ( mbc->ram_size )
 
-#define CHECK_BOUNDERIES(a, b, msg, rv) do {                                                                    \
-    if (phys_addr < a || phys_addr >= b) {                                                                      \
-        fprintf(stderr, "OUT OF RANGE %s BANK%d ($%04X => $%llX)\n", msg, ROM_BANK_NUMBER, addr, (uint64_t)phys_addr);    \
-        return rv;                                                                                              \
-    }                                                                                                           \
+#define CHECK_BOUNDERIES(a, b, msg, rv) do {                                                                            \
+    if (phys_addr < a || phys_addr >= b) {                                                                              \
+        fprintf(stderr, "OUT OF RANGE %s BANK%d ($%04X => $%llX)\n", msg, ROM_BANK_NUMBER, addr, (uint64_t)phys_addr);  \
+        return rv;                                                                                                      \
+    }                                                                                                                   \
 } while(0)
 
 typedef BYTE (*mbc_read_callback)(GB_mbc_t *mbc, WORD addr);
@@ -46,27 +46,29 @@ struct GB_mbc_s {
     mbc_write_callback  write_callback;
 };
 
-BYTE GB_mbc0_read(GB_mbc_t *mbc, WORD addr) {
-    if (addr > 0x9FFF && addr < 0xC000) {
-        if (!_ram_size) return 0x00;
-        addr -= 0x2000;
+#define GB_MBC_READ_TEMPLATE(n, ramb_addr_expr)                                     \
+    BYTE GB_mbc##n##_read(GB_mbc_t *mbc, WORD addr) {                               \
+        if (addr < 0x4000) {                                                        \
+            return _rom[addr];                                                      \
+        } else if (addr < 0x8000) {                                                 \
+            return _rom[0x4000 * ROM_BANK_NUMBER + (addr - 0x4000)];                \
+        } else if (addr > 0x9FFF && addr < 0xC000 && RAM_ENABLED) {                 \
+            return _ram[ramb_addr_expr];                                            \
+        }                                                                           \
+        return 0xFF;                                                                \
     }
 
-    //CHECK_BOUNDERIES(0, data_size, "MBC0 READ ROM BANK0", 0xFF);
-    return _rom[addr];
-}
+GB_MBC_READ_TEMPLATE(0, (addr&0x1fff))
 
 void GB_mbc0_write(GB_mbc_t *mbc, WORD addr, BYTE data) {
     if (addr < 0x8000) {
-        //CHECK_BOUNDERIES(0, data_size, "MBC0 WRITE ROM BANK0", );
         _rom[addr] = data;
-    } else if (addr > 0x9FFF && addr < 0xC000 && _ram_size) {
-        addr -= 0x2000;
-
-        //CHECK_BOUNDERIES(0, data_size, "MBC0 WRITE RAM BANK0", );
-        _rom[addr] = data;
+    } else if (addr > 0x9FFF && addr < 0xC000 && RAM_ENABLED) {
+        _ram[addr&0x1fff] = data;
     }
 }
+
+#define MBC1_RAM_ADDR() ( ( (BANKING_MODE & RAM_BANK_NUMBER) << 13 ) | (addr & 0x1fff) )
 
 BYTE GB_mbc1_read(GB_mbc_t *mbc, WORD addr) {
     /**
@@ -111,11 +113,7 @@ BYTE GB_mbc1_read(GB_mbc_t *mbc, WORD addr) {
 
         return _rom[phys_addr];
     } else if (addr > 0x9FFF && addr < 0xC000 && RAM_ENABLED) {         // RAM Bank 00-03
-        phys_addr &= 0x1fff; // Use gameboy address bits 0-12
-
-        if (BANKING_MODE && _ram_size > 8*1024) {
-            phys_addr |= (RAM_BANK_NUMBER << 13);
-        }
+        phys_addr = MBC1_RAM_ADDR();
 
         CHECK_BOUNDERIES(0, _ram_size, "READ RAM BANK", 0xFF);
 
@@ -139,12 +137,8 @@ void GB_mbc1_write(GB_mbc_t *mbc, WORD addr, BYTE data) {
         mbc->banking_mode = (data&1) ? ~((int)0) : 0;
     }
 
-    if (addr > 0x9FFF && addr < 0xC000 && RAM_ENABLED) {                                   // RAM Bank 00-03
-        phys_addr &= 0x1fff;
-        
-        if (BANKING_MODE && _ram_size > 8*1024) {
-            phys_addr |= (RAM_BANK_NUMBER << 13);
-        }
+    if (addr > 0x9FFF && addr < 0xC000 && RAM_ENABLED) {                    // RAM Bank 00-03
+        phys_addr = MBC1_RAM_ADDR();
 
         CHECK_BOUNDERIES(0, _ram_size, "MBC1 WRITE RAM BANK", );
 
@@ -152,17 +146,7 @@ void GB_mbc1_write(GB_mbc_t *mbc, WORD addr, BYTE data) {
     }
 }
 
-BYTE GB_mbc2_read(GB_mbc_t *mbc, WORD addr) {
-    if (addr < 0x4000) {
-        return _rom[addr];
-    } else if (addr < 0x8000) {
-        return _rom[0x4000 * ROM_BANK_NUMBER + (addr - 0x4000)];
-    } else if (addr > 0x9FFF && addr < 0xC000 && RAM_ENABLED) {
-        return _ram[addr&0x1ff];
-    }
-
-    return 0xFF;
-}
+GB_MBC_READ_TEMPLATE(2, (addr&0x1ff))
 
 void GB_mbc2_write(GB_mbc_t *mbc, WORD addr, BYTE data) {
     if (addr < 0x4000) {
@@ -178,17 +162,7 @@ void GB_mbc2_write(GB_mbc_t *mbc, WORD addr, BYTE data) {
     }
 }
 
-BYTE GB_mbc5_read(GB_mbc_t *mbc, WORD addr) {
-    if (addr < 0x4000) {
-        return _rom[addr];
-    } else if (addr < 0x8000) {
-        return _rom[0x4000 * ROM_BANK_NUMBER + (addr - 0x4000)];
-    } else if (addr > 0x9FFF && addr < 0xC000 && RAM_ENABLED) {
-        return _ram[0x2000 * mbc->ram_bank_number + (addr - 0xA000)];
-    }
-
-    return 0xFF;
-}
+GB_MBC_READ_TEMPLATE(5, (0x2000 * RAM_BANK_NUMBER + (addr - 0xA000)))
 
 void GB_mbc5_write(GB_mbc_t *mbc, WORD addr, BYTE data) {
     if (addr < 0x2000) {
@@ -255,19 +229,22 @@ int load_rom(GB_mbc_t *mbc, FILE *fp, long file_size) {
 
 #define SETUP_RW() do {                                                                         \
 	switch(header->cartridge_type) {                                                            \
-		case 0: SET_MBC_CALLBACKS(0); break;                                                    \
-		case 1: SET_MBC_CALLBACKS(1); break;                                                    \
-		case 2: SET_MBC_CALLBACKS(1); break;                                                    \
-		case 3: SET_MBC_CALLBACKS(1); break;                                                    \
-		case 5: SET_MBC_CALLBACKS(2); break;                                                    \
-		case 6: SET_MBC_CALLBACKS(2); break;                                                    \
-		case 8: SET_MBC_CALLBACKS(0); break;                                                    \
+        case 0:                                                                                 \
+        case 8:                                                                                 \
 		case 9: SET_MBC_CALLBACKS(0); break;                                                    \
-        case 0x19: SET_MBC_CALLBACKS(5); break;                                                 \
-        case 0x1A: SET_MBC_CALLBACKS(5); break;                                                 \
-        case 0x1B: SET_MBC_CALLBACKS(5); break;                                                 \
-        case 0x1C: SET_MBC_CALLBACKS(5); break;                                                 \
-        case 0x1D: SET_MBC_CALLBACKS(5); break;                                                 \
+		case 1:                                                                                 \
+		case 2:                                                                                 \
+        case 3: SET_MBC_CALLBACKS(1); break;                                                    \
+		case 5:                                                                                 \
+		case 6:                                                                                 \
+            SET_MBC_CALLBACKS(2);                                                               \
+            mbc->ram_bank_count = 1; /* Build-in RAM */                                         \
+            break;                                                                              \
+        case 0x19:                                                                              \
+        case 0x1A:                                                                              \
+        case 0x1B:                                                                              \
+        case 0x1C:                                                                              \
+        case 0x1D:                                                                              \
         case 0x1E: SET_MBC_CALLBACKS(5); break;                                                 \
 		default:                                                                                \
 			fprintf(stderr, "UNSUPPORTED CARTRIDGE %d\n", header->cartridge_type);              \
@@ -301,19 +278,14 @@ GB_mbc_t* GB_mbc_create(GB_header_t *header, FILE *rom_fp, long file_size) {
 
     FAIL_IF(load_rom(mbc, rom_fp, file_size)) 
 
-    if (header->cartridge_type == 5 || header->cartridge_type == 6) {
-        mbc->ram_bank_count = 1;
-    } else {
-        SET_RAM_BANK_COUNT();
-    }
+    SET_RAM_BANK_COUNT();
+    SETUP_RW();
 
 	mbc->ram_size = 8192UL * mbc->ram_bank_count;
 	if (mbc->ram_size) {
 		mbc->ram = (BYTE*)( malloc( sizeof (BYTE) * mbc->ram_size + 1 ) );
 		FAIL_IF(!mbc->ram)
 	}
-
-    SETUP_RW();
 
     return mbc;
 }
@@ -329,5 +301,4 @@ void GB_mbc_destroy(GB_mbc_t *mbc) {
 	
     free(mbc);
 }
-
 
