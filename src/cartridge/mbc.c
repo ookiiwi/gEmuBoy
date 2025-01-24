@@ -13,16 +13,19 @@
 #define RAM_ENABLED         ( mbc->ram_bank_count && mbc->ram_enabled )
 #define BANKING_MODE        ( mbc->banking_mode )
 
-#define _rom                ( mbc->rom )
-#define _ram                ( mbc->ram )
 #define _rom_size           ( mbc->rom_size )
 #define _ram_size           ( mbc->ram_size )
 
-#define CHECK_BOUNDERIES(a, b, msg, rv) do {                                                                            \
-    if (phys_addr < a || phys_addr >= b) {                                                                              \
-        fprintf(stderr, "OUT OF RANGE %s BANK%d ($%04X => $%llX)\n", msg, ROM_BANK_NUMBER, addr, (uint64_t)phys_addr);  \
-        return rv;                                                                                                      \
-    }                                                                                                                   \
+#define CHECK_BOUNDERIES(a, b, src_addr, real_addr, msg, rv) do {                   \
+    if (real_addr < a || real_addr >= b) {                                          \
+        fprintf(stderr,                                                             \
+                "OUT OF RANGE %s BANK%d ($%04X => $%lX)\n",                         \
+                msg,                                                                \
+                ROM_BANK_NUMBER,                                                    \
+                src_addr,                                                           \
+                (unsigned long)real_addr);                                          \
+        return rv;                                                                  \
+    }                                                                               \
 } while(0)
 
 typedef BYTE (*mbc_read_callback)(GB_mbc_t *mbc, WORD addr);
@@ -46,14 +49,26 @@ struct GB_mbc_s {
     mbc_write_callback  write_callback;
 };
 
+#define RETURN_FROM_ROM(real_addr)                                                  \
+    CHECK_BOUNDERIES(0, _rom_size, addr, (real_addr), "READ ROM", 0xFF);            \
+    return mbc->rom[real_addr]
+
+#define RETURN_FROM_RAM(real_addr)                                                  \
+    CHECK_BOUNDERIES(0, _ram_size, addr, (real_addr), "READ RAM", 0xFF);            \
+    return mbc->ram[real_addr]
+
+#define ACCESS_RAM(real_addr)                                                       \
+    CHECK_BOUNDERIES(0, _ram_size, addr, (real_addr), "WRITE RAM", );               \
+    mbc->ram[real_addr]
+
 #define GB_MBC_READ_TEMPLATE(n, ramb_addr_expr)                                     \
     BYTE GB_mbc##n##_read(GB_mbc_t *mbc, WORD addr) {                               \
         if (addr < 0x4000) {                                                        \
-            return _rom[addr];                                                      \
+            RETURN_FROM_ROM(addr);                                                  \
         } else if (addr < 0x8000) {                                                 \
-            return _rom[0x4000 * ROM_BANK_NUMBER + (addr - 0x4000)];                \
+            RETURN_FROM_ROM(0x4000 * ROM_BANK_NUMBER + (addr - 0x4000));            \
         } else if (addr > 0x9FFF && addr < 0xC000 && RAM_ENABLED) {                 \
-            return _ram[ramb_addr_expr];                                            \
+            RETURN_FROM_RAM(ramb_addr_expr);                                        \
         }                                                                           \
         return 0xFF;                                                                \
     }
@@ -61,10 +76,8 @@ struct GB_mbc_s {
 GB_MBC_READ_TEMPLATE(0, (addr&0x1fff))
 
 void GB_mbc0_write(GB_mbc_t *mbc, WORD addr, BYTE data) {
-    if (addr < 0x8000) {
-        _rom[addr] = data;
-    } else if (addr > 0x9FFF && addr < 0xC000 && RAM_ENABLED) {
-        _ram[addr&0x1fff] = data;
+    if (addr > 0x9FFF && addr < 0xC000 && RAM_ENABLED) {
+        ACCESS_RAM(addr&0x1fff) = data;
     }
 }
 
@@ -103,21 +116,16 @@ BYTE GB_mbc1_read(GB_mbc_t *mbc, WORD addr) {
 
     if (addr < 0x4000) {                                                // ROM Bank 00
         phys_addr += 0x4000 * (((mbc->ram_bank_number << 5) & BANKING_MODE) & ROM_BANK_MASK);
-        CHECK_BOUNDERIES(0, _rom_size, "READ ROM", 0xFF);
 
-        return _rom[phys_addr];
+        RETURN_FROM_ROM(phys_addr);
     } else if (addr < 0x8000) {                                         // ROM Bank 01-7F
         phys_addr = 0x4000 * (((mbc->ram_bank_number << 5) | ROM_BANK_NUMBER) & ROM_BANK_MASK) + (addr - 0x4000);
 
-        CHECK_BOUNDERIES(0, _rom_size, "READ ROM", 0xFF);
-
-        return _rom[phys_addr];
+        RETURN_FROM_ROM(phys_addr);
     } else if (addr > 0x9FFF && addr < 0xC000 && RAM_ENABLED) {         // RAM Bank 00-03
         phys_addr = MBC1_RAM_ADDR();
 
-        CHECK_BOUNDERIES(0, _ram_size, "READ RAM BANK", 0xFF);
-
-        return _ram[phys_addr];
+        RETURN_FROM_RAM(phys_addr);
     }
 
     return 0xFF;
@@ -140,9 +148,7 @@ void GB_mbc1_write(GB_mbc_t *mbc, WORD addr, BYTE data) {
     if (addr > 0x9FFF && addr < 0xC000 && RAM_ENABLED) {                    // RAM Bank 00-03
         phys_addr = MBC1_RAM_ADDR();
 
-        CHECK_BOUNDERIES(0, _ram_size, "MBC1 WRITE RAM BANK", );
-
-        _ram[phys_addr] = data;
+        ACCESS_RAM(phys_addr) = data;
     }
 }
 
@@ -158,7 +164,7 @@ void GB_mbc2_write(GB_mbc_t *mbc, WORD addr, BYTE data) {
     }
 
     else if (addr >= 0xA000 && addr < 0xC000 && RAM_ENABLED) {
-        _ram[addr&0x1ff] = 0xF0 | (data&0xF);
+        ACCESS_RAM(addr&0x1ff) = 0xF0 | (data&0xF);
     }
 }
 
@@ -176,7 +182,7 @@ void GB_mbc5_write(GB_mbc_t *mbc, WORD addr, BYTE data) {
     }
 
     else if (addr >= 0xA000 && addr < 0xC000 && RAM_ENABLED) {
-        _ram[0x2000 * mbc->ram_bank_number + (addr - 0xA000)] = data;
+        ACCESS_RAM(0x2000 * mbc->ram_bank_number + (addr - 0xA000)) = data;
     }
 }
 
@@ -207,7 +213,7 @@ int load_rom(GB_mbc_t *mbc, FILE *fp, long file_size) {
     return 0;
 }
 
-#define FAIL_IF(cond) \
+#define FAIL_IF(cond)                                                                           \
     if (cond) { GB_mbc_destroy(mbc); return NULL; }
 
 #define SET_RAM_BANK_COUNT() do {                                                               \
@@ -251,7 +257,6 @@ int load_rom(GB_mbc_t *mbc, FILE *fp, long file_size) {
             FAIL_IF(1)                                                                          \
 	}                                                                                           \
 } while (0)
-
 
 GB_mbc_t* GB_mbc_create(GB_header_t *header, FILE *rom_fp, long file_size) {
     GB_mbc_t *mbc = NULL;
