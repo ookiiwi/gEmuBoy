@@ -16,9 +16,11 @@ else()
     message("Valgrind tests disabled")
 endif()
 
+set(GEMUBOY_PRGM_PATH "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
+
 add_executable(${PROJECT_NAME} src/testboy.c src/custom_io.c)
 target_include_directories(${PROJECT_NAME} PRIVATE include/)
-target_compile_definitions(${PROJECT_NAME} PUBLIC GB_MAIN_PRGM_DIR="${CMAKE_SOURCE_DIR}/build/")
+target_compile_definitions(${PROJECT_NAME} PUBLIC GEMUBOY_PRGM_PATH="${GEMUBOY_PRGM_PATH}")
 target_compile_definitions(${PROJECT_NAME} PUBLIC TEST_BOY_DIR="${PROJECT_SOURCE_DIR}")
 target_link_libraries(${PROJECT_NAME} PRIVATE ProjectExtra)
 
@@ -31,17 +33,19 @@ function (add_gb_test test_roms prefix test_suite_id)
         set(TEST_NAME "${PROJECT_NAME}_${prefix}_${ROM_NAME}")
         set(TEST_ARGS ${path} ${test_suite_id})
 
-        add_test(NAME ${TEST_NAME} COMMAND ${PROJECT_NAME} ${TEST_ARGS}) 
-        set_tests_properties(${TEST_NAME} PROPERTIES TIMEOUT 40)
+        add_test(NAME ${TEST_NAME} COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/testboy.sh" ${TEST_ARGS} "${GEMUBOY_PRGM_PATH}") 
+        set_tests_properties(${TEST_NAME} PROPERTIES TIMEOUT 40 TIMEOUT_SIGNAL_NAME SIGTERM)
 
         if (VALGRIND_FOUND AND TIMEOUT_FOUND)
             set(VALGRIND_TEST_NAME "${CMAKE_PROJECT_NAME}_${prefix}_${ROM_NAME}_valgrind")
             add_test(NAME ${VALGRIND_TEST_NAME} 
-                        COMMAND timeout 10 valgrind
+                        COMMAND timeout --preserve-status 10 valgrind
                             --error-exitcode=1
                             --track-origins=yes
                             --leak-check=full
-                            $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${path} "-l")
+                            "${GEMUBOY_PRGM_PATH}" ${path} "-l")
+
+            set_tests_properties(${VALGRIND_TEST_NAME} PROPERTIES TIMEOUT 40 TIMEOUT_SIGNAL_NAME SIGTERM)
         endif()
     endforeach()
 endfunction()
