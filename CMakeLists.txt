@@ -4,9 +4,6 @@ set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED TRUE)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Ensure XCode's clang is not used
-set(CMAKE_C_COMPILER "clang")
-set(CMAKE_CXX_COMPILER "clang++")
 set(ARGPARSE_SHARED OFF)
 
 project(gemuboy LANGUAGES C)
