@@ -4,7 +4,10 @@ on: [push]
 jobs:
   Run-testboy-on-Ubuntu:
     name: Run testboy on Ubuntu
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
@@ -13,8 +16,14 @@ jobs:
           ls ${{ github.workspace }}
       - name: Download dependencies 
         run: |
-          sudo apt-get update
-          sudo apt-get install build-essential cmake libsdl2-2.0-0 libsdl2-dev valgrind
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            sudo apt-get update
+            sudo apt-get install build-essential cmake libsdl2-2.0-0 libsdl2-dev valgrind
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+            brew update
+            brew install coreutils gcc cmake sdl2 
+            alias timeout=gtimeout
+          fi
       - name: Init submodules
         run: |
           git submodule update --init --recursive
