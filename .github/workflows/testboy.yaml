@@ -32,7 +32,10 @@ jobs:
         env:
           CC: ${{ matrix.compiler }}
         run: |
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+          if [ "$RUNNER_OS" == "macOS" ]; then
+            export CC="gcc-$(brew list --version gcc | grep -Eo '\d+' | head -1)"
+          fi
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=$CC
           cmake --build build
       - name: Run testboy
         run: ctest --test-dir build/test -j -E ".*_valgrind$" -V 
