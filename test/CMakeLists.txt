@@ -18,12 +18,6 @@ endif()
 
 set(GEMUBOY_PRGM_PATH "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 
-add_executable(${PROJECT_NAME} src/testboy.c src/custom_io.c)
-target_include_directories(${PROJECT_NAME} PRIVATE include/)
-target_compile_definitions(${PROJECT_NAME} PUBLIC GEMUBOY_PRGM_PATH="${GEMUBOY_PRGM_PATH}")
-target_compile_definitions(${PROJECT_NAME} PUBLIC TEST_BOY_DIR="${PROJECT_SOURCE_DIR}")
-target_link_libraries(${PROJECT_NAME} PRIVATE ProjectExtra)
-
 function (add_gb_test test_roms prefix test_suite_id)
     foreach (path ${test_roms})
         string(REGEX MATCH "[^\/]+\/[^\/]+\.gb$" RELATIVE_PATH ${path})

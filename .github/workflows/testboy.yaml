@@ -1,0 +1,28 @@
+name: testboy CI
+run-name: ${{ github.actor }} is testing gemuboy via testboy using CTest
+on: [push]
+jobs:
+  Run-testboy-on-Ubuntu:
+    name: Run testboy on Ubuntu
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+      - name: List files in the repository
+        run: |
+          ls ${{ github.workspace }}
+      - name: Download dependencies 
+        run: |
+          sudo apt-get update
+          sudo apt-get install build-essential cmake libsdl2-2.0-0 libsdl2-dev valgrind
+      - name: Init submodules
+        run: |
+          git submodule update --init --recursive
+      - name: Build project
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build
+      - name: Run testboy
+        run: ctest --test-dir build/test -j -E ".*_valgrind$" -V 
+      - name: Run valgrind
+        run: ctest --test-dir build/test -j -R ".*_valgrind$" -V 
