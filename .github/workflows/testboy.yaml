@@ -1,0 +1,43 @@
+name: testboy CI
+run-name: ${{ github.actor }} is testing gemuboy via testboy using CTest
+on: [push, pull_request]
+jobs:
+  Run-testboy:
+    name: Run testboy
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        compiler: [gcc, clang]
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+      - name: List files in the repository
+        run: |
+          ls ${{ github.workspace }}
+      - name: Download dependencies 
+        run: |
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            sudo apt-get update
+            sudo apt-get install build-essential clang cmake libsdl2-2.0-0 libsdl2-dev valgrind
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+            brew update
+            brew install coreutils gcc llvm cmake sdl2 
+            alias timeout=gtimeout
+          fi
+      - name: Init submodules
+        run: |
+          git submodule update --init --recursive
+      - name: Build project
+        env:
+          CC: ${{ matrix.compiler }}
+        run: |
+          if [ "$RUNNER_OS" == "macOS" ]; then
+            export CC="gcc-$(brew list --version gcc | grep -Eo '\d+' | head -1)"
+          fi
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=$CC
+          cmake --build build
+      - name: Run testboy
+        run: ctest --test-dir build/test -j -E ".*_valgrind$" -V 
+      - name: Run valgrind
+        run: ctest --test-dir build/test -j -R ".*_valgrind$" -V 
