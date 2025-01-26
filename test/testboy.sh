@@ -6,15 +6,6 @@ USAGE_MGS="USAGE: testboy.sh <ROM_PATH> <TEST_SUITE_ID> [GEMUBOY_PATH]"
 GEKKIO_SUCCESS_SEQ="358132134"
 GEKKIO_FAILURE_SEQ="666666666666"
 
-fd_re='^[0-9]+$'
-cleanup_and_wait() {
-    if [[ ${COPROC[1]} =~ $fd_re ]] ; then
-        eval "exec ${COPROC[1]}<&-"
-        echo "waiting for $filename to finish" >&2
-        wait $COPROC_PID
-    fi
-}
-
 rom_path=$1
 test_suite_id=$2
 gemuboy_path=$3
