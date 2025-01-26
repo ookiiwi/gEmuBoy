@@ -1,6 +1,6 @@
 name: testboy CI
 run-name: ${{ github.actor }} is testing gemuboy via testboy using CTest
-on: [push]
+on: [push, pull_request]
 jobs:
   Run-testboy:
     name: Run testboy
