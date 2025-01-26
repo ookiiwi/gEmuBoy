@@ -7,24 +7,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define VRAM_START_ADDR     (0x8000)
-#define EXT_RAM_START_ADDR  (0xA000)
-#define WRAM_START_ADDR     (0xC000)
-#define ECHO_RAM_START_ADDR (0xE000)
-#define OAM_START_ADDR      (0xFE00)
-#define UNUSABLE_START_ADDR (0xFEA0)
-#define IO_REGS_START_ADDR  (0xFF00)
-#define HRAM_START_ADDR     (0xFF80)
-#define IE_START_ADDR       (0xFFFF)
-
-#define ADJUST_ADDR(min, max) do {                                                          \
-    if ( addr < min || addr >= max) {                                                       \
-        fprintf(stderr, "OUT OF RANGE $%04X NOT IN RANGE [$%04X-$%04X]\n", addr, min, max); \
-        addr = max-1;                                                                       \
-    }                                                                                       \
-    addr -= min;                                                                            \
-} while(0)
-
 enum DMA_STATE {
 	DMA_STOP,
 	DMA_START_M1,	
@@ -34,9 +16,6 @@ enum DMA_STATE {
 };
 
 #define DMA_RESTART_CNTDOWN_DEFAULT (3) // Waits 2 M-cycle and restart on the third one
-
-#define OAM_START_ADDR 	(0xFE00)
-#define OAM_END_ADDR 	(0xFE9F)
 #define DMA_SOURCE_ADDR (0xFF46)
 
 struct GB_mmu_s {
@@ -50,58 +29,92 @@ struct GB_mmu_s {
 	BYTE data_bus;
 };
 
+#define _START_ADDR(area_name_upper_case)   (GB_ ## area_name_upper_case ## _START_ADDR) 
+#define _END_ADDR(area_name_upper_case)     (GB_ ## area_name_upper_case ## _END_ADDR) 
 
-BYTE mem_read(GB_gameboy_t *gb, WORD addr) {
-    if (addr < VRAM_START_ADDR) {           // ROM bank     -- 0000-7FFF
-        return GB_mbc_read(gb->cartridge->mbc, addr);
-    } 
-    
-    else if (addr < EXT_RAM_START_ADDR) {   // VRAM         -- 8000-9FFF
-        return GB_ppu_vram_read(gb->ppu, addr);
-    } 
-    
-    else if (addr < WRAM_START_ADDR) {      // RAM bank     -- A000-BFFF
-        return GB_mbc_read(gb->cartridge->mbc, addr);
-    } 
-    
-    else if (addr < ECHO_RAM_START_ADDR) {  // WRAM         -- C000-DFFF
-        ADJUST_ADDR(WRAM_START_ADDR, ECHO_RAM_START_ADDR);
-        return gb->wram[addr];
-    } 
-    
-    else if (addr < OAM_START_ADDR) {       // Echo wram    -- E000-FDFF
-        ADJUST_ADDR(ECHO_RAM_START_ADDR, OAM_START_ADDR);
-        return gb->wram[addr];
-    } 
-    
-    else if (addr < UNUSABLE_START_ADDR) {  // OAM          -- FE00-FE9F
-        return GB_ppu_oam_read(gb->ppu, addr);
-    } 
-    
-    else if (addr < IO_REGS_START_ADDR) {   // Not Usable   -- FEA0-FEFF cf. https://gbdev.io/pandocs/Memory_Map.html#fea0feff-range
-        ADJUST_ADDR(UNUSABLE_START_ADDR, IO_REGS_START_ADDR);
-        return gb->unusable[addr];
-    } 
-    
-    else if (addr < HRAM_START_ADDR) {      // IO REGS      -- FF00-FF7F
-        ADJUST_ADDR(IO_REGS_START_ADDR, HRAM_START_ADDR);
-        return gb->io_regs[addr];
-    } 
-    
-    else if (addr < IE_START_ADDR) {        // HRAM         -- FF80-FFFE
-        ADJUST_ADDR(HRAM_START_ADDR, IE_START_ADDR);
-        return gb->hram[addr];
-    } 
+#define ADJUST_ADDR(area_name_upper_case) do {                                                                                                                      \
+    int min = _START_ADDR(area_name_upper_case);                                                                                                                    \
+    int max = _END_ADDR(area_name_upper_case);                                                                                                                      \
+    if ( addr <  min || addr > max ) {                                                                                                                              \
+        fprintf(stderr, "OUT OF RANGE $%04X NOT IN RANGE [$%04X-$%04X]\n", addr, min, max);                                                                         \
+        addr = max;                                                                                                                                                 \
+    }                                                                                                                                                               \
+    addr -= min;                                                                                                                                                    \
+} while(0)
 
-    // IE    
-    return gb->ie;
-}
+#define IF_ADDR_IN_RANGE(area_name_upper_case, statement)                                   if (addr >= _START_ADDR(area_name_upper_case) && addr <= _END_ADDR(area_name_upper_case)) { statement }
+#define IF_ADDR(a, statement)                                                               if (addr == a) { statement }
+#define MEM_write_FUNC_DECL                                                                 void mem_write(GB_gameboy_t *gb, WORD addr, BYTE data)
+#define MEM_read_FUNC_DECL                                                                  BYTE mem_read(GB_gameboy_t *gb, WORD addr)
+#define MEM_write_DEFAULT_RETURN                                                            return
+#define MEM_read_DEFAULT_RETURN                                                             return 0xFF
+#define MAKE_MEM_write_RANGE_ACCESS_CALLBACK(area_name_upper_case, prefix, user_data)       IF_ADDR_IN_RANGE ( area_name_upper_case, { prefix##_write(user_data, addr, data); return; } )
+#define MAKE_MEM_read_RANGE_ACCESS_CALLBACK(area_name_upper_case, prefix, user_data)        IF_ADDR_IN_RANGE ( area_name_upper_case, return prefix##_read(user_data, addr); )
+#define MAKE_MEM_write_ACCESS_CALLBACK(access_addr, prefix, user_data)                      IF_ADDR          ( access_addr, { prefix##_write(user_data, addr, data); return; } )
+#define MAKE_MEM_read_ACCESS_CALLBACK(access_addr, prefix, user_data)                       IF_ADDR          ( access_addr, return prefix##_read(user_data, addr); )
+#define MAKE_MEM_write_RANGE_ACCESS_ARRAY(area_name_upper_case, array_name)                 IF_ADDR_IN_RANGE ( area_name_upper_case, { ADJUST_ADDR(area_name_upper_case); gb->array_name[addr] = data; return; } ) 
+#define MAKE_MEM_read_RANGE_ACCESS_ARRAY(area_name_upper_case, array_name)                  IF_ADDR_IN_RANGE ( area_name_upper_case, { ADJUST_ADDR(area_name_upper_case); return gb->array_name[addr]; } )
+#define MAKE_MEM_write_ACCESS_VAR(access_addr, var_name)                                    IF_ADDR          ( access_addr, gb->var_name = data; return; )
+#define MAKE_MEM_read_ACCESS_VAR(access_addr, var_name)                                     IF_ADDR          ( access_addr, return gb->var_name; )
+
+#define _GB_io_reg_write(io_regs, addr, data)           ( io_regs[addr&0xFF] = data )
+#define _GB_io_reg_read(io_regs, addr)                  ( io_regs[addr&0xFF] )
+
+#define GB_joypad_write(io_regs, addr, data)            _GB_io_reg_write(io_regs, addr, data)
+#define GB_joypad_read(io_regs, addr)                   ( io_regs[addr&0xFF] & 0x3F )
+
+#define GB_timer_write(io_regs, addr, data)             _GB_io_reg_write(io_regs, addr, GB_timer_write_check(gb, addr, data))
+#define GB_timer_read(io_regs, addr)                    _GB_io_reg_read(io_regs, addr)
+
+#define GB_lcd_write(io_regs, addr, data) do {                                                                                                                      \
+        if (addr == DMA_SOURCE_ADDR) {                                                                                                                              \
+            if (gb->mmu->dma_state == DMA_STOP) {                                                                                                                   \
+                gb->mmu->dma_state = DMA_START_M1;                                                                                                                  \
+            } else {                                                                                                                                                \
+                gb->mmu->dma_restart_cntdown = DMA_RESTART_CNTDOWN_DEFAULT;                                                                                         \
+            }                                                                                                                                                       \
+        }                                                                                                                                                           \
+        _GB_io_reg_write(io_regs, addr, data);                                                                                                                      \
+} while (0)
+#define GB_lcd_read(io_regs, addr) _GB_io_reg_read(io_regs, addr)
+
+#define GB_boot_rom_write(io_regs, addr, data) (io_regs[addr&0xFF] |= (data!=0))
+#define GB_boot_rom_read(io_regs, addr) _GB_io_reg_read(io_regs, addr) 
+
+#define DECL_MEM_ACCESSOR(access_type)                                                                                                                              \
+    MEM_##access_type##_FUNC_DECL {                                                                                                                                 \
+        MAKE_MEM_##access_type##_RANGE_ACCESS_CALLBACK(ROM,                     GB_mbc,                 gb->cartridge->mbc)     /* ROM bank     -- 0000-7FFF */     \
+        MAKE_MEM_##access_type##_RANGE_ACCESS_CALLBACK(VRAM,                    GB_ppu_vram,            gb->ppu)                /* VRAM         -- 8000-9FFF */     \
+        MAKE_MEM_##access_type##_RANGE_ACCESS_CALLBACK(EXT_RAM,                 GB_mbc,                 gb->cartridge->mbc)     /* RAM bank     -- A000-BFFF */     \
+        MAKE_MEM_##access_type##_RANGE_ACCESS_ARRAY   (WRAM,                    wram)                                           /* WRAM         -- C000-DFFF */     \
+        MAKE_MEM_##access_type##_RANGE_ACCESS_CALLBACK(OAM,                     GB_ppu_oam,             gb->ppu)                /* OAM          -- FE00-FE9F */     \
+        MAKE_MEM_##access_type##_RANGE_ACCESS_ARRAY   (UNUSABLE,                unusable)                                       /* Not Usable   -- FEA0-FEFF */     \
+        /* ============= IO REGS ============= */                                                                                                                   \
+        MAKE_MEM_##access_type##_ACCESS_CALLBACK      (GB_JOYP_ADDR,            GB_joypad,              gb->io_regs)            /* Joypad       -- FF00      */     \
+        MAKE_MEM_##access_type##_RANGE_ACCESS_CALLBACK(SERIAL,                  _GB_io_reg,             gb->io_regs)            /* Serial       -- FF01-FF02 */     \
+        MAKE_MEM_##access_type##_RANGE_ACCESS_CALLBACK(TIMER_REGS,              GB_timer,               gb->io_regs)            /* Timer        -- FF04-FF07 */     \
+        MAKE_MEM_##access_type##_ACCESS_CALLBACK      (GB_IF_ADDR,              _GB_io_reg,             gb->io_regs)            /* Interrupts   -- FF0F      */     \
+        MAKE_MEM_##access_type##_RANGE_ACCESS_CALLBACK(APU,                     _GB_io_reg,             gb->io_regs)            /* Audio        -- FF10-FF26 */     \
+        MAKE_MEM_##access_type##_RANGE_ACCESS_CALLBACK(WAVE_PATTERN_RAM,        _GB_io_reg,             gb->io_regs)            /* Wave pattern -- FF30-FF3F */     \
+        MAKE_MEM_##access_type##_RANGE_ACCESS_CALLBACK(LCD_REGS,                GB_lcd,                 gb->io_regs)            /* LCD Control, -- FF40-FF4B */     \
+        MAKE_MEM_##access_type##_ACCESS_CALLBACK      (GB_BOOT_ROM_UNMAP_ADDR,  GB_boot_rom,            gb->io_regs)            /* Boot rom     -- FF50      */     \
+        /* =================================== */                                                                                                                   \
+        MAKE_MEM_##access_type##_RANGE_ACCESS_ARRAY   (HRAM,                    hram)                                           /* HRAM         -- FF80-FFFE */     \
+        MAKE_MEM_##access_type##_ACCESS_VAR           (GB_IE_ADDR,              ie)                                             /* IE           -- FFFF      */     \
+        /* Adjust address match wram address range in case echo ram is accessed */                                                                                  \
+        addr -= 0x2000;                                                                                                                                             \
+        MAKE_MEM_##access_type##_RANGE_ACCESS_ARRAY   (WRAM,                    wram)                                           /* Echo wram    -- E000-FDFF */     \
+        MEM_##access_type##_DEFAULT_RETURN;                                                                                                                         \
+    }
+
+DECL_MEM_ACCESSOR(read)
+DECL_MEM_ACCESSOR(write)
 
 BYTE GB_mem_read(GB_gameboy_t *gb, WORD addr) { 
     if (gb->mmu->is_dma_active) {
 		// TODO: DMA conflicts
 
-		if (addr >= OAM_START_ADDR && addr <= OAM_END_ADDR) {
+		if (addr >= GB_OAM_START_ADDR && addr <= GB_OAM_END_ADDR) {
 			return 0xFF;
         }
 	}
@@ -109,83 +122,21 @@ BYTE GB_mem_read(GB_gameboy_t *gb, WORD addr) {
     return mem_read(gb, addr); 
 }
 
-void mem_write(GB_gameboy_t *gb, WORD addr, BYTE data) {
+void GB_mem_write(GB_gameboy_t *gb, WORD addr, BYTE data) {
+    if (gb->mmu->is_dma_active) {
+		if (addr >= GB_OAM_START_ADDR && addr <= GB_OAM_END_ADDR) {
+			return;
+        }
+	}
+    
     // temporary solution until serial transfer is implemented
     if (addr == GB_SC_ADDR && (data & 0x80) == 0x80) {
         printf("%d", gb->io_regs[1]);
         fflush(stdout);
     }
 
-    if (addr < VRAM_START_ADDR) {           // ROM bank
-        GB_mbc_write(gb->cartridge->mbc, addr, data);
-    } 
-    
-    else if (addr < EXT_RAM_START_ADDR) {   // VRAM
-        GB_ppu_vram_write(gb->ppu, addr, data);
-    } 
-    
-    else if (addr < WRAM_START_ADDR) {      // RAM bank
-        GB_mbc_write(gb->cartridge->mbc, addr, data);
-    }
-    
-    else if (addr < ECHO_RAM_START_ADDR) {  // WRAM
-        ADJUST_ADDR(WRAM_START_ADDR, ECHO_RAM_START_ADDR);
-        gb->wram[addr] = data;
-    } 
-    
-    else if (addr < OAM_START_ADDR) {       // Echo wram C000-DDFF
-        ADJUST_ADDR(ECHO_RAM_START_ADDR, OAM_START_ADDR);
-        gb->wram[addr] = data;
-    } 
-
-    else if (addr < UNUSABLE_START_ADDR) {  // OAM
-        GB_ppu_oam_write(gb->ppu, addr, data);
-    }
-    
-    else if (addr < IO_REGS_START_ADDR) {   // Not Usable cf. https://gbdev.io/pandocs/Memory_Map.html#fea0feff-range
-        ADJUST_ADDR(UNUSABLE_START_ADDR, IO_REGS_START_ADDR);
-        gb->unusable[addr] = data;
-    } 
-    
-    else if (addr < HRAM_START_ADDR) {      // IO REGS
-        if (addr == 0xFF44) { return; }
-        
-        if (addr == DMA_SOURCE_ADDR) {
-            if (gb->mmu->dma_state == DMA_STOP) {
-                gb->mmu->dma_state = DMA_START_M1;
-            } else {
-                gb->mmu->dma_restart_cntdown = DMA_RESTART_CNTDOWN_DEFAULT;
-            }
-        }
-
-        if (addr == 0xFFFF || addr == 0xFF0F) {
-            data |= 0xE0;
-        }
-
-        ADJUST_ADDR(IO_REGS_START_ADDR, HRAM_START_ADDR);
-        gb->io_regs[addr] = GB_timer_write_check(gb, 0xFF00 | addr, data);
-    } 
-    
-    else if (addr < IE_START_ADDR) {        // HRAM
-        ADJUST_ADDR(HRAM_START_ADDR, IE_START_ADDR);
-        gb->hram[addr] = data;
-    } 
-    
-    else {                                  // IE
-        gb->ie = data;
-    }
-}
-
-void GB_mem_write(GB_gameboy_t *gb, WORD addr, BYTE data) {
-    if (gb->mmu->is_dma_active) {
-		if (addr >= OAM_START_ADDR && addr <= OAM_END_ADDR) {
-			return;
-        }
-	}
-
     mem_write(gb, addr, data);
 }
-
 
 GB_mmu_t* GB_mmu_create() {
 	GB_mmu_t *mmu = (GB_mmu_t*)( malloc( sizeof (GB_mmu_t) ) );
@@ -225,10 +176,10 @@ void GB_dma_run(GB_gameboy_t *gb) {
 			gb->mmu->dma_offset 	= 0;
 			// NOTE: break is omitted on purpose
     	case DMA_RUNNING: {
-			gb->mmu->addr_bus = OAM_START_ADDR | gb->mmu->dma_offset;
+			gb->mmu->addr_bus = GB_OAM_START_ADDR | gb->mmu->dma_offset;
             gb->mmu->data_bus = mem_read(gb, (gb->mmu->dma_source | gb->mmu->dma_offset));
     		mem_write(gb, gb->mmu->addr_bus, gb->mmu->data_bus);
-    		if (++gb->mmu->dma_offset > ( OAM_END_ADDR & 0xFF ) ) { 	
+    		if (++gb->mmu->dma_offset > ( GB_OAM_END_ADDR & 0xFF ) ) { 	
     			gb->mmu->dma_state 		= DMA_STOP; 						
 				gb->mmu->dma_offset 	= 0;
 				gb->mmu->is_dma_active 	= 0;
