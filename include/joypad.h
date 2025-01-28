@@ -24,6 +24,7 @@ static inline GB_joypad_t* GB_joypad_create() {
 }
 
 static inline void GB_joypad_destroy(GB_joypad_t *joypad) {
+    if (joypad) free(joypad);
 }
 
 #define GB_P1                   ( gb->io_regs[GB_JOYP_ADDR&0xFF] )
