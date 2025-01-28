@@ -1,6 +1,8 @@
 #include "gb.h"
 #include "cpudef.h"
+#include "joypad.h"
 #include "mmu.h"
+#include "memmap.h"
 
 #include <stdlib.h>
 
@@ -40,6 +42,9 @@ GB_gameboy_t*   GB_gameboy_create(const char *rom_path, int headless) {
     gb->mmu = GB_mmu_create();
     CHECK_ALLOC(gb->mmu);
 
+    gb->joypad = GB_joypad_create();
+    CHECK_ALLOC(gb->joypad);
+
     gb->wram = ALLOC_BYTE_ARRAY(WRAM_SIZE);
     CHECK_ALLOC(gb->wram); 
 
@@ -68,6 +73,7 @@ void GB_gameboy_destroy(GB_gameboy_t *gb) {
     if (gb->io_regs)    free(gb->io_regs);
     if (gb->unusable)   free(gb->unusable);
     if (gb->wram)       free(gb->wram);
+    GB_joypad_destroy(gb->joypad);
     GB_mmu_destroy(gb->mmu);
     GB_ppu_destroy(gb->ppu);
     GB_cpu_destroy(gb->cpu);
@@ -98,7 +104,7 @@ const static int DMG_INIT[] = {
 };
 
 void gameboy_init(GB_gameboy_t *gb) {
-  rA = 0x01;
+    rA = 0x01;
 	rF = 0x80 | (gb->cartridge->header->header_checksum ? 0x30 : 0x00); // half-carry and carry are set if header checksum not null
 	rB = 0x00;
 	rC = 0x13;
@@ -114,6 +120,6 @@ void gameboy_init(GB_gameboy_t *gb) {
         GB_mem_write(gb, (0xFF00 | i), DMG_INIT[i]);
     }
 
-	GB_mem_write(gb, 0xFFFF, 0x00); //IE
-	GB_mem_write(gb, 0xFF50, 1); // DISABLE BOOTROM
+	GB_mem_write(gb, GB_IE_ADDR, 0x00);
+	GB_mem_write(gb, GB_BOOT_ROM_UNMAP_ADDR, 1);
 }

@@ -5,12 +5,14 @@
 #include "cpu/interrupt.h"
 #include "cpu/timer.h"
 #include "graphics/ppu.h"
+#include "joypad.h"
 
 #define INC_CYCLE() do {                                              															    \
     gb->cpu->t_cycle_counter+=4;                                        															\
     GB_dma_run(gb);                                                                                                                 \
     GB_ppu_tick(gb, 4);                                                                                                             \
     GB_timer_update(gb);                                               															    \
+    GB_joypad_update(gb);                                                                                                           \
 } while(0)
 
 #define FETCH_CYCLE() do {                                                                                                          \
