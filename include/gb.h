@@ -5,12 +5,14 @@
 #include "cartridge/cartridge.h"
 #include "graphics/ppu.h"
 #include "defs.h"
+#include "joypad.h"
 
 struct GB_gameboy_s {
     GB_cartridge_t  *cartridge;
     GB_cpu_t        *cpu;
     GB_ppu_t        *ppu;
     GB_mmu_t        *mmu;
+    GB_joypad_t     *joypad;
 
     // Registers
     BYTE    *wram;      // C000-DFFF

@@ -52,8 +52,12 @@ int main(int argc, const char **argv) {
     while(isrunning) {
         SDL_Event event;
         while(!headless && SDL_PollEvent(&event)) {
-            if (event.type == SDL_QUIT) {
-                isrunning = 0;
+            switch (event.type) {
+                case SDL_QUIT:
+                    isrunning = 0;
+                    break;
+                default:
+                    break;
             }
         }
 
@@ -65,5 +69,6 @@ int main(int argc, const char **argv) {
 
     GB_gameboy_destroy(gb);
 
+    SDL_Quit();
     return EXIT_SUCCESS;
 }

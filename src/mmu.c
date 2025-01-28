@@ -2,6 +2,7 @@
 #include "gb.h"
 #include "graphics/ppu.h"
 #include "memmap.h"
+#include "joypad.h"
 #include "cartridge/mbc.h"
 
 #include <stdio.h>
@@ -60,9 +61,6 @@ struct GB_mmu_s {
 #define _GB_io_reg_write(io_regs, addr, data)           ( io_regs[addr&0xFF] = data )
 #define _GB_io_reg_read(io_regs, addr)                  ( io_regs[addr&0xFF] )
 
-#define GB_joypad_write(io_regs, addr, data)            _GB_io_reg_write(io_regs, addr, data)
-#define GB_joypad_read(io_regs, addr)                   ( io_regs[addr&0xFF] & 0x3F )
-
 #define GB_timer_write(io_regs, addr, data)             _GB_io_reg_write(io_regs, addr, GB_timer_write_check(gb, addr, data))
 #define GB_timer_read(io_regs, addr)                    _GB_io_reg_read(io_regs, addr)
 
@@ -90,7 +88,7 @@ struct GB_mmu_s {
         MAKE_MEM_##access_type##_RANGE_ACCESS_CALLBACK(OAM,                     GB_ppu_oam,             gb->ppu)                /* OAM          -- FE00-FE9F */     \
         MAKE_MEM_##access_type##_RANGE_ACCESS_ARRAY   (UNUSABLE,                unusable)                                       /* Not Usable   -- FEA0-FEFF */     \
         /* ============= IO REGS ============= */                                                                                                                   \
-        MAKE_MEM_##access_type##_ACCESS_CALLBACK      (GB_JOYP_ADDR,            GB_joypad,              gb->io_regs)            /* Joypad       -- FF00      */     \
+        MAKE_MEM_##access_type##_ACCESS_CALLBACK      (GB_JOYP_ADDR,            GB_joypad,              gb)                     /* Joypad       -- FF00      */     \
         MAKE_MEM_##access_type##_RANGE_ACCESS_CALLBACK(SERIAL,                  _GB_io_reg,             gb->io_regs)            /* Serial       -- FF01-FF02 */     \
         MAKE_MEM_##access_type##_RANGE_ACCESS_CALLBACK(TIMER_REGS,              GB_timer,               gb->io_regs)            /* Timer        -- FF04-FF07 */     \
         MAKE_MEM_##access_type##_ACCESS_CALLBACK      (GB_IF_ADDR,              _GB_io_reg,             gb->io_regs)            /* Interrupts   -- FF0F      */     \
