@@ -144,7 +144,7 @@ void pixelfifo_push(PixelFIFO *fifo, BYTE color_id, BYTE palette_id, BYTE bg_pri
     cell.palette_id        = palette_id;
     cell.bg_priority       = bg_priority;
 
-    fifo->buffer[ ( fifo->start + fifo->size ) % 16 ] = cell;
+    fifo->buffer[ ( fifo->start + fifo->size ) & 0xF ] = cell;
     fifo->size++;
 }
 
@@ -258,7 +258,7 @@ void pixelfetcher_destroy(PixelFetcher *fetcher) {
 
 BYTE GB_ppu_vram_read(GB_ppu_t *ppu, WORD addr) {
     if (addr < 0x8000 || addr >= 0xA000) {
-        fprintf(stderr, "VRAM READ OUT OF RANGE\n");
+        fprintf(stderr, "VRAM READ OUT OF RANGE: $%04X\n", addr);
         return 0xFF;
     }
 
@@ -431,6 +431,8 @@ void bg_fetch(GB_gameboy_t *gb) {
         case FETCHER_GET_DATA_HIGH:
             BG_FETCHER->tile_data_high = pixelfetcher_get_tile_data(gb, 1);
             break;
+        case FETCHER_IDLE: 
+            break;
         default: /* Try push */
             pixelfetcher_push(gb);
             break;
@@ -522,7 +524,7 @@ void sprite_fetch(GB_gameboy_t *gb) {
     }
 }
 
-void ppu_render(GB_gameboy_t *gb) {
+void ppu_render(GB_gameboy_t *gb) {    
     if (pixelfifo_empty(BG_FETCHER->fifo)) return;
 
     BYTE color_id, bg_priority;
@@ -553,11 +555,6 @@ void ppu_render(GB_gameboy_t *gb) {
     }
 
     LX++;
-
-    if (!BG_FETCHER->draw_window && SHOW_WIN) {
-        PIXEL_FETCHER_RESET(BG_FETCHER);
-        BG_FETCHER->draw_window = 1;
-    } 
 }
 
 void ppu_oamsearch(GB_gameboy_t *gb) {
@@ -588,10 +585,6 @@ void ppu_oamsearch(GB_gameboy_t *gb) {
 
     if (++SCANLINE_DOT_COUNTER >= 80) {
         SET_PPU_MODE(PPU_MODE_DRAW);
-
-        if (WY <= LY && WX-7 <= 160) {
-            BG_FETCHER->window_line_counter++;
-        }
     }
 }
 
@@ -610,6 +603,12 @@ void ppu_draw(GB_gameboy_t *gb) {
         PIXEL_FETCHER_RESET(BG_FETCHER);
         PIXEL_FETCHER_RESET(OBJ_FETCHER);
         SET_PPU_MODE(PPU_MODE_HBLANK);
+    }
+
+    if (!BG_FETCHER->draw_window && SHOW_WIN && WY <= LY && WX-7 <= 160) {
+        PIXEL_FETCHER_RESET(BG_FETCHER);
+        BG_FETCHER->draw_window = 1;
+        BG_FETCHER->window_line_counter++;
     }
 }
 
