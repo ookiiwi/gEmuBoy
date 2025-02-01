@@ -635,7 +635,7 @@ void ppu_vblank(GB_gameboy_t *gb) {
     if ( PPU_MODE_SWITCHED ) {
         REQUEST_INTERRUPT(IF_VBLANK);
 
-        if (MODE1_INT) {
+        if (MODE1_INT || MODE2_INT) {
             REQUEST_INTERRUPT(IF_LCD);
         }
 
