@@ -17,8 +17,7 @@ typedef struct {
     PixelFetcher    *obj_fetcher;
     int             fetch_obj;
     int             lx;                         /* Current scanline X coordinate */
-    int             pending_cycles;
-    int             scanline_dot_counter;
+    int             mode_dot_counters[4];
     int             m_ppu_mode_switched;
 
     GB_LCD_t        *lcd;
@@ -29,10 +28,13 @@ void        GB_ppu_destroy(GB_ppu_t *ppu);
 
 void        GB_ppu_tick(GB_gameboy_t *gb, int cycles);
 
-BYTE        GB_ppu_vram_read(GB_ppu_t *ppu, WORD addr);
-void        GB_ppu_vram_write(GB_ppu_t *ppu, WORD addr, BYTE data);
+BYTE        GB_ppu_vram_read(GB_gameboy_t *gb, WORD addr);
+void        GB_ppu_vram_write(GB_gameboy_t *gb, WORD addr, BYTE data);
 
 BYTE        GB_ppu_oam_read(GB_ppu_t *ppu, WORD addr);
 void        GB_ppu_oam_write(GB_ppu_t *ppu, WORD addr, BYTE data);
 
+void        GB_ppu_print_state(GB_gameboy_t *gb);
+
 #endif
+
