@@ -16,8 +16,7 @@ So I think I will just re-write it from scratch :)
 
 ## Build and Run
 
-sh
-```
+```sh
 $ git clone --recurse-submodules -j8 https://github.com/ookiiwi/gEmuBoy.git
 $ cd build
 $ cmake ..
