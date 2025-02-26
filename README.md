@@ -43,4 +43,7 @@ $ ./gemuboy <PATH_TO_ROM>
 
 - [Pandocs](https://gbdev.io/pandocs)
 - [GBDEDG](https://hacktix.github.io/GBEDG)
+- [gbctr](https://gekkio.fi/files/gb-docs/gbctr.pdf)
+- [gbops](https://izik1.github.io/gbops/)
+- [Nitty Gritty Gameboy Cycle Timing](http://blog.kevtris.org/blogfiles/Nitty%20Gritty%20Gameboy%20VRAM%20Timing.txt)
 
