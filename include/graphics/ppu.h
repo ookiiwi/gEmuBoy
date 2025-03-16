@@ -2,6 +2,8 @@
 #define GRAPHIC_H_
 
 #include "defs.h"
+#include "graphics/internal/oambuffer.h"
+#include "graphics/internal/pixelfetcher.h"
 #include "type.h"
 #include "lcd.h"
 
@@ -12,9 +14,10 @@ typedef struct {
     BYTE            *vram;
     BYTE            *oam;
 
-    OAMBuffer       *oam_buffer;
-    PixelFetcher    *bg_fetcher;
-    PixelFetcher    *obj_fetcher;
+    oambuffer_t     oambuffer;
+    pixelfetcher_t  pixelfetcher;
+    int             obj_penalty_checked_tile;
+    int             obj_fetch_penalty;
     int             fetch_obj;
     int             lx;                         /* Current scanline X coordinate */
     int             mode_dot_counters[4];

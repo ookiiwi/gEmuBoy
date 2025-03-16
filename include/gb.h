@@ -20,6 +20,8 @@ struct GB_gameboy_s {
     BYTE    *io_regs;   // FF00-FF7F
     BYTE    *hram;      // FF80-FFFE
     BYTE    ie;         // FFFF
+
+    BYTE    *boot_rom;
 };
 
 GB_gameboy_t*   GB_gameboy_create(const char *rom_path, int headless);

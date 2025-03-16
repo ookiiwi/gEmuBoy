@@ -34,7 +34,7 @@ struct GB_mmu_s {
 #define _END_ADDR(area_name_upper_case)     (GB_ ## area_name_upper_case ## _END_ADDR) 
 
 #define ADJUST_ADDR(area_name_upper_case) do {                                                                                                                      \
-    int min = _BEG_ADDR(area_name_upper_case);                                                                                                                    \
+    int min = _BEG_ADDR(area_name_upper_case);                                                                                                                      \
     int max = _END_ADDR(area_name_upper_case);                                                                                                                      \
     if ( addr <  min || addr > max ) {                                                                                                                              \
         fprintf(stderr, "OUT OF RANGE $%04X NOT IN RANGE [$%04X-$%04X]\n", addr, min, max);                                                                         \
@@ -64,6 +64,16 @@ struct GB_mmu_s {
 #define GB_timer_write(io_regs, addr, data)             _GB_io_reg_write(io_regs, addr, GB_timer_write_check(gb, addr, data))
 #define GB_timer_read(io_regs, addr)                    _GB_io_reg_read(io_regs, addr)
 
+#define _GB_mbc_write(gb, addr, data) do {                                                                                                                          \
+    if (addr >= 0x100 || gb->io_regs[GB_BOOT_ROM_UNMAP_ADDR&0xFF]) {                                                                                                \
+        GB_mbc_write(gb->cartridge->mbc, addr, data);                                                                                                               \
+    }                                                                                                                                                               \
+} while (0)
+
+#define _GB_mbc_read(gb, addr)                                                                                                                                      \
+    ( (addr >= 0x100 || gb->io_regs[GB_BOOT_ROM_UNMAP_ADDR&0xFF]) ?                                                                                                 \
+        GB_mbc_read(gb->cartridge->mbc, addr) : gb->boot_rom[addr] ) 
+
 #define GB_lcd_write(io_regs, addr, data) do {                                                                                                                      \
         if (addr == DMA_SOURCE_ADDR) {                                                                                                                              \
             if (gb->mmu->dma_state == DMA_STOP) {                                                                                                                   \
@@ -79,9 +89,9 @@ struct GB_mmu_s {
 #define GB_boot_rom_write(io_regs, addr, data) (io_regs[addr&0xFF] |= (data!=0))
 #define GB_boot_rom_read(io_regs, addr) _GB_io_reg_read(io_regs, addr) 
 
-#define DECL_MEM_ACCESSOR(access_type)                                                                                                                              \
-    MEM_##access_type##_FUNC_DECL {                                                                                                                                 \
-        MAKE_MEM_##access_type##_RANGE_ACCESS_CALLBACK(ROM,                         GB_mbc,                 gb->cartridge->mbc)     /* ROM bank     -- 0000-7FFF */     \
+#define DECL_MEM_ACCESSOR(access_type)                                                                                                                                  \
+    MEM_##access_type##_FUNC_DECL {                                                                                                                                     \
+        MAKE_MEM_##access_type##_RANGE_ACCESS_CALLBACK(ROM,                         _GB_mbc,                gb)                     /* ROM bank     -- 0000-7FFF */     \
         MAKE_MEM_##access_type##_RANGE_ACCESS_CALLBACK(VRAM,                        GB_ppu_vram,            gb)                     /* VRAM         -- 8000-9FFF */     \
         MAKE_MEM_##access_type##_RANGE_ACCESS_CALLBACK(EXT_RAM,                     GB_mbc,                 gb->cartridge->mbc)     /* RAM bank     -- A000-BFFF */     \
         MAKE_MEM_##access_type##_RANGE_ACCESS_ARRAY   (WRAM,                        wram)                                           /* WRAM         -- C000-DFFF */     \
@@ -100,13 +110,13 @@ struct GB_mmu_s {
         MAKE_MEM_##access_type##_RANGE_ACCESS_CALLBACK(LCD_REGS,                    GB_lcd,                 gb->io_regs)            /* LCD Control, -- FF40-FF4B */     \
         MAKE_MEM_##access_type##_ACCESS_CALLBACK      (GB_BOOT_ROM_UNMAP_ADDR,      GB_boot_rom,            gb->io_regs)            /* Boot rom     -- FF50      */     \
         MAKE_MEM_##access_type##_RANGE_ACCESS_CALLBACK(BOOTROM_HRAM_UNUSED_RANGE,   _GB_io_reg,             gb->io_regs)            /* Unused range -- FF51-FF7F */     \
-        /* =================================== */                                                                                                                   \
+        /* =================================== */                                                                                                                       \
         MAKE_MEM_##access_type##_RANGE_ACCESS_ARRAY   (HRAM,                        hram)                                           /* HRAM         -- FF80-FFFE */     \
         MAKE_MEM_##access_type##_ACCESS_VAR           (GB_IE_ADDR,                  ie)                                             /* IE           -- FFFF      */     \
-        /* Adjust address match wram address range in case echo ram is accessed */                                                                                  \
-        addr -= 0x2000;                                                                                                                                             \
+        /* Adjust address match wram address range in case echo ram is accessed */                                                                                      \
+        addr -= 0x2000;                                                                                                                                                 \
         MAKE_MEM_##access_type##_RANGE_ACCESS_ARRAY   (WRAM,                        wram)                                           /* Echo wram    -- E000-FDFF */     \
-        MEM_##access_type##_DEFAULT_RETURN;                                                                                                                         \
+        MEM_##access_type##_DEFAULT_RETURN;                                                                                                                             \
     }
 
 DECL_MEM_ACCESSOR(read)
