@@ -79,20 +79,32 @@ static inline void adjust_obj_tile_id(GB_gameboy_t *gb) {
 }
 
 static inline void push_tile_row(GB_gameboy_t *gb) {
-    oam_obj_t obj = is_fetching_objects() ? *(_fetcher->oam_obj) : (oam_obj_t){ 0 };
+    oam_obj_t obj = (oam_obj_t){ 0 };;
     int overlap_offset = 0;
-    WORD data       = ( (_fetcher->tile_data_low << 8) | _fetcher->tile_data_high ) << ( (is_fetching_objects() && obj.x<8) ? 8-obj.x : 0 ); // (8-x)*2 ?
-    BYTE data_low   = data >> 8;
-    BYTE data_high  = data & 0xFF ;
+    WORD data; 
+    BYTE data_low; 
+    BYTE data_high;
 
-    // TODO: fix overlap. Not working for "m3_lcdc_bg_map_change.gb"
+    data = ( (_fetcher->tile_data_low << 8) | _fetcher->tile_data_high );
+
     if (is_fetching_objects()) {
-        if (obj.x-8 < _fetcher->last_sprite_x_end) {
-            overlap_offset = _fetcher->last_sprite_x_end - (obj.x-8);
+        obj = *(_fetcher->oam_obj);
+        int objx_start = obj.x-8;
+        
+        if (obj.x<8) {
+            data <<= (8-obj.x);  // (8-x)*2 ?
+            objx_start = 0;
+        }
+
+        if (objx_start < _fetcher->last_sprite_x_end) {
+            overlap_offset = _fetcher->last_sprite_x_end - objx_start;
         }
         
-        _fetcher->last_sprite_x_end  = obj.x;
+        _fetcher->last_sprite_x_end = obj.x;
     }
+
+    data_low  = data >> 8;
+    data_high = data & 0xFF ;
 
     /* Try push */
     pixelfifo_push_row(
